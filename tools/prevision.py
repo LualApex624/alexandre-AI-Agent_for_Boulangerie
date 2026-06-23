@@ -31,6 +31,7 @@ PARAMÈTRE :
 - jour_semaine : jour en français avec majuscule.
   OPTIONS : "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"
 """
+    print(f"[TOOL CALL] prevision_production | jour_semaine={jour_semaine}")
     try:
         results = _get_historique_ventes()
     except Exception as e:

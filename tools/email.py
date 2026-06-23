@@ -37,6 +37,8 @@ def envoyer_email(destinataire: str, objet: str, corps: str) -> str:
     - Inclure : produit, quantité, coordonnées de la boulangerie
     - Commencer par "Madame, Monsieur,"
     - Terminer par "Cordialement, Madeleine Croûton - Boulangerie Chez Madeleine"
+    - Texte brut UNIQUEMENT — aucun markdown, aucun gras, aucun titre, aucun symbole
+
     EXEMPLE DE CORPS :
     Madame, Monsieur,
 
