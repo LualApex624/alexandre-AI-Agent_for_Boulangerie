@@ -1,0 +1,307 @@
+/* =========================
+   Gustave 🥐 — Bakery Premium Theme
+   Palette : crème, croissant, miel, chocolat
+   ========================= */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+/* ── Variables ── */
+:root {
+    /* Gustave palette */
+    --gustave-cream:    #fff8ed;
+    --gustave-cream-2:  #f7e4c6;
+    --gustave-gold:     #d8892f;
+    --gustave-gold-2:   #f2b35f;
+    --gustave-brown:    #4a2614;
+    --gustave-brown-2:  #7a3f16;
+    --gustave-border:   #e0c9a0;
+    --gustave-soft:     #fff1d8;
+    --gustave-shadow:   rgba(122, 63, 22, 0.08);
+    --gustave-shadow-md: rgba(122, 63, 22, 0.14);
+
+    /* Chainlit Tailwind overrides */
+    --background: 39 100% 97%;        /* cream page bg */
+    --foreground: 20 52% 18%;         /* brown text */
+    --card: 36 100% 95%;              /* cream cards */
+    --card-foreground: 20 52% 18%;
+    --popover: 39 100% 97%;
+    --popover-foreground: 20 52% 18%;
+    --primary: 30 70% 45%;            /* gold buttons */
+    --primary-foreground: 39 100% 97%;
+    --secondary: 36 60% 88%;          /* light cream */
+    --secondary-foreground: 20 52% 18%;
+    --muted: 34 55% 85%;              /* user message bg */
+    --muted-foreground: 20 30% 35%;
+    --accent: 33 60% 50%;             /* composer bg, accents */
+    --accent-foreground: 39 100% 97%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 34 40% 78%;             /* borders */
+    --input: 34 40% 82%;
+    --ring: 30 70% 45%;
+}
+
+/* ── Reset font everywhere ── */
+* {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* ── Page background ── */
+body {
+    background: linear-gradient(170deg, #fff8ed 0%, #f7e4c6 50%, #f0d4a8 100%) !important;
+    color: var(--gustave-brown) !important;
+}
+
+/* ── Header ── */
+header {
+    background: linear-gradient(135deg, #5c2d0e 0%, #8b4b1e 60%, #b96a24 100%) !important;
+    color: var(--gustave-cream) !important;
+    border-bottom: 2px solid var(--gustave-gold-2) !important;
+    box-shadow: 0 2px 16px rgba(74, 38, 20, 0.2) !important;
+}
+
+header a, header button, header span, header p,
+header svg {
+    color: var(--gustave-cream) !important;
+}
+
+/* ── Sidebar ── */
+aside {
+    background: rgba(255, 248, 237, 0.95) !important;
+    border-right: 1px solid var(--gustave-border) !important;
+}
+
+/* ── Main ── */
+main {
+    background: transparent !important;
+}
+
+
+/* =====================
+   MESSAGES
+   ===================== */
+
+/* Assistant */
+[data-testid="assistant-message"] {
+    background: linear-gradient(135deg, #fff3df 0%, #fff8ed 100%) !important;
+    border: 1px solid var(--gustave-border) !important;
+    border-radius: 20px 20px 20px 4px !important;
+    color: #3a2414 !important;
+    box-shadow: 0 2px 12px var(--gustave-shadow) !important;
+}
+
+[data-testid="assistant-message"] p {
+    line-height: 1.65 !important;
+    color: #3a2414 !important;
+}
+
+[data-testid="assistant-message"] strong {
+    color: var(--gustave-brown-2) !important;
+}
+
+/* User */
+[data-testid="user-message"] {
+    background: linear-gradient(135deg, #c47a22 0%, #9b5a15 100%) !important;
+    color: white !important;
+    border-radius: 20px 20px 4px 20px !important;
+    box-shadow: 0 4px 16px rgba(156, 90, 21, 0.25) !important;
+    border: none !important;
+}
+
+[data-testid="user-message"] p {
+    color: white !important;
+    line-height: 1.65 !important;
+}
+
+/* Lists inside messages */
+[data-testid="assistant-message"] ul,
+[data-testid="assistant-message"] ol {
+    padding-left: 1.2em !important;
+}
+
+[data-testid="assistant-message"] li {
+    margin-bottom: 4px !important;
+}
+
+/* Message animation */
+[data-testid="message"] {
+    animation: gustaveFadeIn 0.3s ease-out;
+}
+
+@keyframes gustaveFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* =====================
+   MESSAGE COMPOSER (input area)
+   ===================== */
+
+#message-composer {
+    background: rgba(255, 248, 237, 0.95) !important;
+    border: 1.5px solid var(--gustave-border) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 4px 24px var(--gustave-shadow),
+                inset 0 1px 3px rgba(255, 255, 255, 0.5) !important;
+}
+
+#message-composer textarea,
+#chat-input {
+    background: transparent !important;
+    color: #3a2414 !important;
+    font-size: 0.95rem !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+#chat-input::placeholder {
+    color: #b89a6a !important;
+    font-style: italic !important;
+}
+
+/* Send button */
+#chat-submit {
+    background: linear-gradient(135deg, #d8892f 0%, #8b4b1e 100%) !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 3px 12px rgba(216, 137, 47, 0.3) !important;
+    transition: all 0.2s ease !important;
+}
+
+#chat-submit:not([disabled]):hover {
+    transform: scale(1.08) !important;
+    box-shadow: 0 5px 20px rgba(216, 137, 47, 0.4) !important;
+}
+
+#chat-submit svg {
+    color: white !important;
+}
+
+/* Upload button */
+#upload-button {
+    color: var(--gustave-brown-2) !important;
+    transition: color 0.2s ease !important;
+}
+
+#upload-button:hover {
+    color: var(--gustave-gold) !important;
+    background: rgba(216, 137, 47, 0.1) !important;
+}
+
+
+/* =====================
+   GENERAL UI ELEMENTS
+   ===================== */
+
+/* Buttons */
+button {
+    border-radius: 14px !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+button:not([disabled]):hover {
+    transform: translateY(-1px) !important;
+}
+
+/* Inputs */
+input {
+    background: var(--gustave-cream) !important;
+    border: 1.5px solid var(--gustave-border) !important;
+    color: #3a2414 !important;
+    border-radius: 12px !important;
+}
+
+input:focus {
+    border-color: var(--gustave-gold) !important;
+    box-shadow: 0 0 0 3px rgba(216, 137, 47, 0.15) !important;
+}
+
+/* Links */
+a {
+    color: #b96a24 !important;
+    text-decoration: none !important;
+    transition: color 0.2s ease !important;
+}
+
+a:hover {
+    color: #7a3f16 !important;
+}
+
+/* Code blocks */
+pre, code {
+    background: #2d1a0e !important;
+    color: #fde8c8 !important;
+    border: 1px solid #5c3a1e !important;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+}
+
+pre {
+    border-radius: 14px !important;
+}
+
+code {
+    border-radius: 6px !important;
+    padding: 2px 6px !important;
+}
+
+/* Tool call steps */
+[data-testid="step"] {
+    background: rgba(255, 241, 216, 0.8) !important;
+    border: 1px solid var(--gustave-border) !important;
+    border-radius: 14px !important;
+}
+
+/* Tables */
+table {
+    border-collapse: collapse !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    width: 100% !important;
+}
+
+th {
+    background: linear-gradient(135deg, #5c2d0e, #8b4b1e) !important;
+    color: var(--gustave-cream) !important;
+    padding: 10px 14px !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+}
+
+td {
+    background: rgba(255, 248, 237, 0.6) !important;
+    padding: 8px 14px !important;
+    border-bottom: 1px solid var(--gustave-border) !important;
+}
+
+tr:hover td {
+    background: rgba(255, 241, 216, 0.9) !important;
+}
+
+
+/* =====================
+   POLISH
+   ===================== */
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #d8892f, #b96a24);
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover { background: #7a3f16; }
+
+/* Selection */
+::selection {
+    background: rgba(216, 137, 47, 0.3) !important;
+    color: #3a2414 !important;
+}
+
+/* Tooltips */
+[role="tooltip"] {
+    background: var(--gustave-cream) !important;
+    border: 1px solid var(--gustave-border) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 8px 30px var(--gustave-shadow-md) !important;
+}

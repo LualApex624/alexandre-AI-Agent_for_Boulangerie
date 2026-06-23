@@ -1,0 +1,7 @@
+langchain
+langchain-community
+langchain-mistralai
+chainlit
+notion-client
+python-dotenv
+pandas

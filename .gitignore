@@ -1,0 +1,29 @@
+# === Secrets ===
+.env
+
+# === Environnement Python ===
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Tests et fichiers locaux ===
+resultats_tests.md
+test_agent.py
+
+# === Chainlit cache ===
+.chainlit/.langchain.db
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+
+# === OS ===
+.DS_Store
+Thumbs.db
