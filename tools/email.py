@@ -49,6 +49,7 @@ def envoyer_email(destinataire: str, objet: str, corps: str) -> str:
     Madeleine Croûton
     Boulangerie Chez Madeleine - Saint-Germain-des-Croissants
     """
+    print(f"[TOOL CALL] envoyer_email | destinataire={destinataire} | objet={objet}")
     message=MIMEMultipart()
     message["from"]=EMAIL_FROM
     message["to"]=destinataire

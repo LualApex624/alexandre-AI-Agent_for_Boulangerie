@@ -39,6 +39,7 @@ def lire_stock(ingredient_name: str) -> str:
     PARAMETRE :
     - ingredient_name : nom ou mot-clé de l'ingrédient recherché. Ex : "beurre", "farine T65", "levure"
     """
+    print(f"[TOOL CALL] lire_stock | ingredient_name={ingredient_name}")
     try:
         data_source_id = _get_data_source_id(STOCK_DB_ID)
         database = notion_client.data_sources.query(
@@ -102,6 +103,7 @@ def lire_ventes(product_name: Optional[str] = None, start_date: Optional[str] = 
     - start_date : date de début au format YYYY-MM-DD
     - end_date : date de fin au format YYYY-MM-DD
     """
+    print(f"[TOOL CALL] lire_ventes | product_name={product_name} | start_date={start_date} | end_date={end_date}")
     if not start_date or not end_date:
         return "Merci de préciser la période souhaitée (ex : 'la semaine dernière', 'du 1er au 7 juin')."
 
@@ -153,7 +155,6 @@ def lire_ventes(product_name: Optional[str] = None, start_date: Optional[str] = 
     return final_text
 
 @tool
-
 def lire_catalogue(product_name:str)->str:
     """Consulte les informations d'un produit du catalogue.
 
@@ -172,6 +173,7 @@ def lire_catalogue(product_name:str)->str:
     product_name : nom ou mot-clé du produit recherché.
     Exemples : "croissant", "éclair au chocolat", "baguette tradition".
     """
+    print(f"[TOOL CALL] lire_catalogue | product_name={product_name}")
     try:
         data_source_id = _get_data_source_id(CATALOGUE_DB_ID)
         filter_query = {"property": "Produit", "title": {"contains": product_name}}
@@ -234,6 +236,7 @@ def enregistrer_commande(
     - montant_estime : coût total estimé (ex: 66.0)
     - notes : informations ou consignes supplémentaires (ex: "Livraison le matin")
     """
+    print(f"[TOOL CALL] enregistrer_commande | fournisseur={fournisseur} | email_fournisseur={email_fournisseur} | produits={produits} | montant_estime={montant_estime} | notes={notes}")
     try:
         # 1. On génère une référence simple (ex: CMD-20260621-LAIT)
         date_str = datetime.now().strftime("%Y%m%d")
