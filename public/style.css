@@ -1,307 +1,199 @@
-/* =========================
-   Gustave 🥐 — Bakery Premium Theme
-   Palette : crème, croissant, miel, chocolat
-   ========================= */
+/* ============================================================
+   Gustave — Boulangerie artisanale moderne
+   Direction visuelle appliquée par-dessus le thème Chainlit.
+   Les couleurs de base vivent dans public/theme.json (variables
+   shadcn). Ce fichier ne fait qu'affiner la mise en forme :
+   typographie, bulles, starters, champ de saisie, avatar.
+   On reste volontairement léger pour ne pas casser l'UI ni
+   masquer les appels d'outils.
+   ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-
-/* ── Variables ── */
 :root {
-    /* Gustave palette */
-    --gustave-cream:    #fff8ed;
-    --gustave-cream-2:  #f7e4c6;
-    --gustave-gold:     #d8892f;
-    --gustave-gold-2:   #f2b35f;
-    --gustave-brown:    #4a2614;
-    --gustave-brown-2:  #7a3f16;
-    --gustave-border:   #e0c9a0;
-    --gustave-soft:     #fff1d8;
-    --gustave-shadow:   rgba(122, 63, 22, 0.08);
-    --gustave-shadow-md: rgba(122, 63, 22, 0.14);
+    --gustave-primary: #c97022;        /* caramel */
+    --gustave-secondary: #8a4516;      /* caramel foncé / croûte */
+    --gustave-tertiary: #241a14;       /* cacao brûlé */
+    --gustave-cream: #f8ead2;          /* crème chaude */
+    --gustave-surface: #fff8ed;        /* surface claire */
+    --gustave-bubble: #fff3dd;         /* miel doux (bulle assistant) */
+    --gustave-bubble-user: #f4e6d2;    /* crème (bulle utilisateur) */
+    --gustave-text: #2b160c;           /* chocolat */
+    --gustave-text-soft: #7a6656;      /* grain doux */
+    --gustave-border: #e1b875;         /* bordure dorée */
+    --gustave-border-soft: #ecd3a6;    /* bordure dorée adoucie */
 
-    /* Chainlit Tailwind overrides */
-    --background: 39 100% 97%;        /* cream page bg */
-    --foreground: 20 52% 18%;         /* brown text */
-    --card: 36 100% 95%;              /* cream cards */
-    --card-foreground: 20 52% 18%;
-    --popover: 39 100% 97%;
-    --popover-foreground: 20 52% 18%;
-    --primary: 30 70% 45%;            /* gold buttons */
-    --primary-foreground: 39 100% 97%;
-    --secondary: 36 60% 88%;          /* light cream */
-    --secondary-foreground: 20 52% 18%;
-    --muted: 34 55% 85%;              /* user message bg */
-    --muted-foreground: 20 30% 35%;
-    --accent: 33 60% 50%;             /* composer bg, accents */
-    --accent-foreground: 39 100% 97%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 34 40% 78%;             /* borders */
-    --input: 34 40% 82%;
-    --ring: 30 70% 45%;
+    --loading-cursor-color: #c97022;
+    --loading-cursor-size: 1rem;
+    --loading-cursor-animation: gustavePulse 1.4s ease-in-out infinite;
 }
 
-/* ── Reset font everywhere ── */
-* {
-    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
-}
-
-/* ── Page background ── */
+/* --- Typographie -------------------------------------------------- */
 body {
-    background: linear-gradient(170deg, #fff8ed 0%, #f7e4c6 50%, #f0d4a8 100%) !important;
-    color: var(--gustave-brown) !important;
+    font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
 }
 
-/* ── Header ── */
-header {
-    background: linear-gradient(135deg, #5c2d0e 0%, #8b4b1e 60%, #b96a24 100%) !important;
-    color: var(--gustave-cream) !important;
-    border-bottom: 2px solid var(--gustave-gold-2) !important;
-    box-shadow: 0 2px 16px rgba(74, 38, 20, 0.2) !important;
+/* Titres éditoriaux en serif (accueil + en-têtes markdown) */
+#welcome-screen h1,
+#welcome-screen h2,
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    letter-spacing: -0.01em;
 }
 
-header a, header button, header span, header p,
-header svg {
-    color: var(--gustave-cream) !important;
+/* --- Logo & avatar : discrets ------------------------------------ */
+/* Logo d'en-tête : petit et rond */
+img[alt="logo"] {
+    max-height: 30px;
+    width: auto;
+    border-radius: 9999px;
 }
 
-/* ── Sidebar ── */
-aside {
-    background: rgba(255, 248, 237, 0.95) !important;
-    border-right: 1px solid var(--gustave-border) !important;
+/* Logo héros de l'écran d'accueil : présent mais sobre, pas envahissant */
+#welcome-screen img[alt="logo"] {
+    max-height: 84px;
+    border: 1px solid var(--gustave-border-soft);
+    box-shadow: 0 2px 8px rgba(43, 22, 12, 0.08);
 }
 
-/* ── Main ── */
-main {
-    background: transparent !important;
+/* Étiquette d'auteur au-dessus des bulles ("Gustave" / "Madeleine") */
+.message-name {
+    color: var(--gustave-text-soft) !important;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: none;
 }
 
+/* --- Bulles de messages ------------------------------------------ */
+/* On cible UNIQUEMENT les messages, pas les étapes d'outils
+   (data-step-type="tool" / "run"), pour garder les tool calls visibles.
 
-/* =====================
-   MESSAGES
-   ===================== */
+   - Le message UTILISATEUR possède déjà sa bulle native (.bg-accent
+     .rounded-3xl) : elle prend automatiquement la couleur crème via
+     --accent / --accent-foreground définis dans theme.json. On ne lui
+     ajoute donc PAS de second cadre, juste une bordure dorée discrète.
+   - Le message ASSISTANT est plat par défaut : on lui donne la bulle
+     miel qui épouse le contenu (.message-content est w-full -> fit). */
 
-/* Assistant */
-[data-testid="assistant-message"] {
-    background: linear-gradient(135deg, #fff3df 0%, #fff8ed 100%) !important;
-    border: 1px solid var(--gustave-border) !important;
-    border-radius: 20px 20px 20px 4px !important;
-    color: #3a2414 !important;
-    box-shadow: 0 2px 12px var(--gustave-shadow) !important;
+/* Bulle assistant : miel doux, bordure dorée, épouse le texte */
+.step[data-step-type="assistant_message"] .message-content {
+    width: fit-content;
+    max-width: 100%;
+    background: var(--gustave-bubble);
+    border: 1px solid var(--gustave-border-soft);
+    border-radius: 18px;
+    border-top-left-radius: 6px;
+    padding: 14px 18px;
+    box-shadow: 0 1px 2px rgba(43, 22, 12, 0.05);
+    color: var(--gustave-text);
 }
 
-[data-testid="assistant-message"] p {
-    line-height: 1.65 !important;
-    color: #3a2414 !important;
+/* Bulle utilisateur native : on affine seulement la bordure dorée */
+.step[data-step-type="user_message"] .bg-accent {
+    border: 1px solid rgba(201, 112, 34, 0.22);
+    box-shadow: 0 1px 2px rgba(43, 22, 12, 0.05);
 }
 
-[data-testid="assistant-message"] strong {
-    color: var(--gustave-brown-2) !important;
+/* Espacement vertical généreux entre les messages */
+.step.py-2 {
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
-/* User */
-[data-testid="user-message"] {
-    background: linear-gradient(135deg, #c47a22 0%, #9b5a15 100%) !important;
-    color: white !important;
-    border-radius: 20px 20px 4px 20px !important;
-    box-shadow: 0 4px 16px rgba(156, 90, 21, 0.25) !important;
-    border: none !important;
+/* Liens lisibles, ton caramel foncé */
+.message-content a {
+    color: var(--gustave-secondary);
+    text-decoration-color: rgba(138, 69, 22, 0.4);
 }
 
-[data-testid="user-message"] p {
-    color: white !important;
-    line-height: 1.65 !important;
-}
-
-/* Lists inside messages */
-[data-testid="assistant-message"] ul,
-[data-testid="assistant-message"] ol {
-    padding-left: 1.2em !important;
-}
-
-[data-testid="assistant-message"] li {
-    margin-bottom: 4px !important;
-}
-
-/* Message animation */
-[data-testid="message"] {
-    animation: gustaveFadeIn 0.3s ease-out;
-}
-
-@keyframes gustaveFadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-
-/* =====================
-   MESSAGE COMPOSER (input area)
-   ===================== */
-
-#message-composer {
-    background: rgba(255, 248, 237, 0.95) !important;
-    border: 1.5px solid var(--gustave-border) !important;
-    border-radius: 24px !important;
-    box-shadow: 0 4px 24px var(--gustave-shadow),
-                inset 0 1px 3px rgba(255, 255, 255, 0.5) !important;
-}
-
-#message-composer textarea,
-#chat-input {
-    background: transparent !important;
-    color: #3a2414 !important;
-    font-size: 0.95rem !important;
-    border: none !important;
+/* --- Starters / boutons de suggestion ---------------------------- */
+/* Pastilles propres et discrètes (bordure douce, fond clair) */
+[id^="starter-"] {
+    background: var(--gustave-surface) !important;
+    border: 1px solid var(--gustave-border-soft) !important;
+    border-radius: 9999px !important;
+    color: var(--gustave-text-soft) !important;
     box-shadow: none !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+[id^="starter-"]:hover {
+    background: #f3e6cc !important;
+    border-color: var(--gustave-border) !important;
+    color: var(--gustave-secondary) !important;
+}
+
+/* --- Champ de saisie --------------------------------------------- */
+/* Composer arrondi, clair, lisible */
+#message-composer {
+    background: #fffdf8 !important;
+    border: 1px solid var(--gustave-border) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 2px 10px rgba(43, 22, 12, 0.06) !important;
+}
+
+#message-composer:focus-within {
+    border-color: var(--gustave-primary) !important;
+    box-shadow: 0 0 0 3px rgba(201, 112, 34, 0.16) !important;
+}
+
+#chat-input,
+#chat-input::placeholder {
+    color: var(--gustave-text);
 }
 
 #chat-input::placeholder {
-    color: #b89a6a !important;
-    font-style: italic !important;
+    color: rgba(122, 102, 86, 0.75);
 }
 
-/* Send button */
+/* Bouton d'envoi : caramel foncé, rond, tactile */
 #chat-submit {
-    background: linear-gradient(135deg, #d8892f 0%, #8b4b1e 100%) !important;
-    color: white !important;
+    background: var(--gustave-secondary) !important;
+    color: #fff8ed !important;
+    border-radius: 9999px !important;
     border: none !important;
-    box-shadow: 0 3px 12px rgba(216, 137, 47, 0.3) !important;
-    transition: all 0.2s ease !important;
 }
 
-#chat-submit:not([disabled]):hover {
-    transform: scale(1.08) !important;
-    box-shadow: 0 5px 20px rgba(216, 137, 47, 0.4) !important;
+#chat-submit:hover:not(:disabled) {
+    background: #74380f !important;
 }
 
-#chat-submit svg {
-    color: white !important;
+#chat-submit:disabled {
+    background: rgba(138, 69, 22, 0.35) !important;
+    color: #fff8ed !important;
 }
 
-/* Upload button */
-#upload-button {
-    color: var(--gustave-brown-2) !important;
-    transition: color 0.2s ease !important;
+/* --- Détails ----------------------------------------------------- */
+/* Barre de défilement fine et dorée */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
 }
 
-#upload-button:hover {
-    color: var(--gustave-gold) !important;
-    background: rgba(216, 137, 47, 0.1) !important;
-}
-
-
-/* =====================
-   GENERAL UI ELEMENTS
-   ===================== */
-
-/* Buttons */
-button {
-    border-radius: 14px !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-button:not([disabled]):hover {
-    transform: translateY(-1px) !important;
-}
-
-/* Inputs */
-input {
-    background: var(--gustave-cream) !important;
-    border: 1.5px solid var(--gustave-border) !important;
-    color: #3a2414 !important;
-    border-radius: 12px !important;
-}
-
-input:focus {
-    border-color: var(--gustave-gold) !important;
-    box-shadow: 0 0 0 3px rgba(216, 137, 47, 0.15) !important;
-}
-
-/* Links */
-a {
-    color: #b96a24 !important;
-    text-decoration: none !important;
-    transition: color 0.2s ease !important;
-}
-
-a:hover {
-    color: #7a3f16 !important;
-}
-
-/* Code blocks */
-pre, code {
-    background: #2d1a0e !important;
-    color: #fde8c8 !important;
-    border: 1px solid #5c3a1e !important;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
-}
-
-pre {
-    border-radius: 14px !important;
-}
-
-code {
-    border-radius: 6px !important;
-    padding: 2px 6px !important;
-}
-
-/* Tool call steps */
-[data-testid="step"] {
-    background: rgba(255, 241, 216, 0.8) !important;
-    border: 1px solid var(--gustave-border) !important;
-    border-radius: 14px !important;
-}
-
-/* Tables */
-table {
-    border-collapse: collapse !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
-    width: 100% !important;
-}
-
-th {
-    background: linear-gradient(135deg, #5c2d0e, #8b4b1e) !important;
-    color: var(--gustave-cream) !important;
-    padding: 10px 14px !important;
-    font-weight: 600 !important;
-    text-align: left !important;
-}
-
-td {
-    background: rgba(255, 248, 237, 0.6) !important;
-    padding: 8px 14px !important;
-    border-bottom: 1px solid var(--gustave-border) !important;
-}
-
-tr:hover td {
-    background: rgba(255, 241, 216, 0.9) !important;
-}
-
-
-/* =====================
-   POLISH
-   ===================== */
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #d8892f, #b96a24);
-    border-radius: 10px;
+    background: var(--gustave-border-soft);
+    border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover { background: #7a3f16; }
 
-/* Selection */
+::-webkit-scrollbar-thumb:hover {
+    background: var(--gustave-border);
+}
+
 ::selection {
-    background: rgba(216, 137, 47, 0.3) !important;
-    color: #3a2414 !important;
+    background: rgba(201, 112, 34, 0.22);
 }
 
-/* Tooltips */
-[role="tooltip"] {
-    background: var(--gustave-cream) !important;
-    border: 1px solid var(--gustave-border) !important;
-    border-radius: 14px !important;
-    box-shadow: 0 8px 30px var(--gustave-shadow-md) !important;
+/* Curseur de chargement */
+@keyframes gustavePulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.45;
+        transform: scale(0.85);
+    }
 }

@@ -97,7 +97,7 @@ reaction_on_message_received = false
 # Name of the assistant.
 name = "Gustave 🥐"
 
-# default_theme = "dark"
+default_theme = "light"
 
 # Force a specific language for all users
 language = "fr-FR"
@@ -158,7 +158,7 @@ logo_file_url = "/public/gustave.png"
 default_avatar_file_url = "/public/gustave.png"
 
 # Avatar size in pixels (default: 20).
-# avatar_size = 20
+avatar_size = 80
 
 # Specify a custom build directory for the frontend.
 # This can be used to customize the frontend code.
