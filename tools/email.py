@@ -2,10 +2,7 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from dotenv import load_dotenv
 from langchain.tools import tool
-
-load_dotenv()
 
 EMAIL_HOST = os.getenv("SMTP_HOST")
 EMAIL_PORT = int(os.getenv("SMTP_PORT"))

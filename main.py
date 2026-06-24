@@ -1,5 +1,8 @@
 import chainlit as cl
+from dotenv import load_dotenv
 from agent import run_agent
+
+load_dotenv()
 
 
 @cl.set_starters

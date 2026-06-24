@@ -3,10 +3,9 @@ from tools.notion import lire_ventes,lire_stock,lire_catalogue,enregistrer_comma
 from tools.email import envoyer_email
 from tools.prevision import prevision_production
 from langchain_mistralai import ChatMistralAI
-from dotenv import load_dotenv
+import os
 from datetime import datetime
 
-load_dotenv()
 with open("prompts/system_prompt.txt", "r", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read()
 

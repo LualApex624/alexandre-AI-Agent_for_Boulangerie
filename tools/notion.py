@@ -1,12 +1,8 @@
 import os
 from typing import Optional
-from dotenv import load_dotenv
 from notion_client import Client
 from langchain.tools import tool
 from datetime import datetime
-
-
-load_dotenv()
 
 
 # Connexion Notion
