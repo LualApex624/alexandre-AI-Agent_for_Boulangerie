@@ -209,3 +209,31 @@ class NotionRepository:
                 )
             )
         return produits
+
+    async def creer_commande(self, commande: NouvelleCommande) -> str:
+        def texte(contenu: str) -> dict:
+            # Notion limite chaque bloc de texte à 2000 caractères.
+            morceaux = [contenu[i : i + 2000] for i in range(0, len(contenu), 2000)] or [""]
+            return {"rich_text": [{"text": {"content": m}} for m in morceaux]}
+
+        proprietes: dict[str, Any] = {
+            "Référence commande": {"title": [{"text": {"content": commande.reference}}]},
+            "Date commande": {"date": {"start": commande.jour.isoformat()}},
+            "Fournisseur": {"select": {"name": commande.fournisseur}},
+            "Email envoyé à": {"email": commande.email},
+            "Produits commandés": texte(commande.produits),
+            "Notes": texte(commande.notes),
+            "Statut": {"select": {"name": "Envoyée"}},
+        }
+        if commande.montant_estime is not None:
+            proprietes["Montant estimé (€)"] = {"number": commande.montant_estime}
+        try:
+            data_source_id = await self._data_source_id(self._ids.commandes)
+            page = await self._client.pages.create(
+                parent={"type": "data_source_id", "data_source_id": data_source_id},
+                properties=proprietes,
+            )
+            return page["id"]
+        except (NotionClientErrorBase, httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+            log.error("Écriture de la commande %s impossible : %s", commande.reference, type(exc).__name__)
+            raise NotionIndisponible from exc

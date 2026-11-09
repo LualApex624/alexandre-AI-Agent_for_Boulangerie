@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import secrets
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Literal, Protocol
@@ -14,8 +17,10 @@ from pydantic import BaseModel, Field
 
 from boulangerie.envelope import arrondi, avertissement, erreur, notion_indisponible, succes
 from boulangerie.forecast import COEFFICIENT, OBSERVATIONS_MINIMALES, fenetre, prevoir
-from boulangerie.notion_repo import NotionIndisponible, NotionRepository
+from boulangerie.notion_repo import NotionIndisponible, NotionRepository, NouvelleCommande
 from boulangerie.prompt import jour_fr
+
+log = logging.getLogger(__name__)
 
 
 class Mailer(Protocol):
@@ -237,6 +242,145 @@ async def _prevoir_production(deps: Deps, date_cible: date, produit: str | None,
     return succes(f"Prévision pour le {jour} {date_cible} : moyenne des {jour}s + 10 %.", data)
 
 
+# --- Outil 2 : passer_commande -------------------------------------------------
+
+OBJET_MAX = 150
+CORPS_MAX = 3000
+FICHIER_TRACE = "commandes_non_tracees.jsonl"
+
+
+class CommanderArgs(BaseModel):
+    fournisseur: str = Field(description="Nom du fournisseur tel qu'il apparaît dans le stock (ex. 'Minoterie Dupont').")
+    produits: str = Field(description="Produits et quantités commandés, ex. '50 kg de Farine T65'.")
+    objet: str = Field(description=f"Objet de l'email, une seule ligne, {OBJET_MAX} caractères maximum.")
+    corps: str = Field(description="Corps de l'email en texte brut (pas de markdown), signé par Madeleine.")
+    montant_estime: float | None = Field(
+        default=None,
+        description="Montant estimé en euros : quantités × prix unitaires lus dans le stock. Laisser vide sinon.",
+    )
+
+
+def _valider_commande(objet: str, corps: str, produits: str, montant: float | None) -> str | None:
+    if not objet.strip() or len(objet) > OBJET_MAX:
+        return f"L'objet doit faire entre 1 et {OBJET_MAX} caractères."
+    if "\r" in objet or "\n" in objet:
+        return "L'objet doit tenir sur une seule ligne."
+    if not corps.strip() or len(corps) > CORPS_MAX:
+        return f"Le corps doit faire entre 1 et {CORPS_MAX} caractères."
+    if not produits.strip():
+        return "Il faut préciser les produits et quantités."
+    if montant is not None and montant < 0:
+        return "Le montant estimé ne peut pas être négatif."
+    return None
+
+
+def _tracer_localement(deps: Deps, commande: NouvelleCommande, cause: str) -> Path:
+    deps.trace_dir.mkdir(parents=True, exist_ok=True)
+    chemin = deps.trace_dir / FICHIER_TRACE
+    enregistrement = {
+        "horodatage": deps.clock().isoformat(timespec="seconds"),
+        "cause": cause,
+        **{k: (v.isoformat() if isinstance(v, date) else v) for k, v in asdict(commande).items()},
+        "corps": commande.notes,
+    }
+    with chemin.open("a", encoding="utf-8") as fichier:
+        fichier.write(json.dumps(enregistrement, ensure_ascii=False) + "\n")
+    return chemin
+
+
+async def _passer_commande(
+    deps: Deps, fournisseur: str, produits: str, objet: str, corps: str, montant_estime: float | None
+) -> str:
+    probleme = _valider_commande(objet, corps, produits, montant_estime)
+    if probleme:
+        return _parametre_invalide(probleme)
+    if deps.mailer is None:
+        return erreur(
+            "EMAIL_NON_CONFIGURE",
+            "L'envoi d'emails n'est pas configuré : rien n'a été envoyé ni noté.",
+            cause="Aucun serveur d'envoi d'emails n'est renseigné.",
+            retry="Ne réessaie pas.",
+            stop="Dis à Madeleine que l'envoi d'emails n'est pas encore branché et propose de lui donner le texte du mail.",
+        )
+
+    try:
+        stock = await deps.repo.lister_stock()
+    except NotionIndisponible:
+        return notion_indisponible()
+    annuaire: dict[str, tuple[str, str | None]] = {}
+    for ingredient in stock:
+        if ingredient.fournisseur:
+            nom, email = annuaire.get(normaliser(ingredient.fournisseur), (ingredient.fournisseur, None))
+            annuaire[normaliser(ingredient.fournisseur)] = (nom, email or ingredient.email)
+    trouve = annuaire.get(normaliser(fournisseur))
+    if trouve is None:
+        return erreur(
+            "FOURNISSEUR_INCONNU",
+            f"« {fournisseur} » n'est pas un fournisseur connu : rien n'a été envoyé.",
+            cause="Ce nom ne correspond à aucun fournisseur du stock.",
+            retry="Reprends la commande avec un des noms de data.fournisseurs_connus.",
+            stop="Si aucun ne convient, demande à Madeleine de préciser le fournisseur.",
+            data={"fournisseurs_connus": sorted({nom for nom, _ in annuaire.values()}, key=normaliser)},
+        )
+    nom_fournisseur, email = trouve
+    if not email:
+        return erreur(
+            "FOURNISSEUR_SANS_EMAIL",
+            f"Aucune adresse email n'est enregistrée pour {nom_fournisseur} : rien n'a été envoyé.",
+            cause="L'email du fournisseur est vide dans le stock.",
+            retry="Ne réessaie pas.",
+            stop="Dis à Madeleine qu'il faut ajouter l'email de ce fournisseur dans ses fiches.",
+        )
+
+    try:
+        await deps.mailer.envoyer(email, objet, corps)
+    except Exception as exc:  # noqa: BLE001 — aucune erreur SMTP ne doit remonter vers l'interface
+        log.warning("Échec d'envoi de l'email à %s : %s", nom_fournisseur, type(exc).__name__)
+        return erreur(
+            "EMAIL_ECHEC",
+            "L'email n'a pas pu partir : rien n'a été envoyé ni noté.",
+            cause="Le serveur d'envoi d'emails a refusé ou n'a pas répondu.",
+            retry="Ne réessaie pas de toi-même.",
+            stop="Préviens Madeleine que l'email n'est pas parti et propose de réessayer plus tard.",
+        )
+
+    commande = NouvelleCommande(
+        reference=f"CMD-{deps.clock():%Y%m%d}-{secrets.token_hex(2).upper()}",
+        jour=deps.clock().date(),
+        fournisseur=nom_fournisseur,
+        email=email,
+        produits=produits,
+        montant_estime=montant_estime,
+        notes=corps,
+    )
+    try:
+        page_id = await deps.repo.creer_commande(commande)
+    except NotionIndisponible:
+        chemin = _tracer_localement(deps, commande, "écriture Notion impossible après envoi de l'email")
+        return json.dumps(
+            {
+                "status": "warning",
+                "summary": f"L'email est parti chez {nom_fournisseur}, mais la commande {commande.reference} "
+                "n'a pas pu être notée dans les commandes. Elle est gardée de côté.",
+                "data": {"destinataire": email, "fournisseur": nom_fournisseur, "objet": objet},
+                "next_actions": ["Explique à Madeleine que l'email est bien parti et que la commande est gardée de côté."],
+                "artifacts": {"reference": commande.reference, "trace_locale": str(chemin)},
+                "error": {
+                    "code": "COMMANDE_NON_TRACEE",
+                    "cause": "L'enregistrement de la commande a échoué après l'envoi de l'email.",
+                    "retry": "Ne jamais relancer passer_commande : l'email partirait une deuxième fois.",
+                    "stop": "Arrête-toi là et informe Madeleine.",
+                },
+            },
+            ensure_ascii=False,
+        )
+    return succes(
+        f"Email envoyé à {nom_fournisseur} et commande {commande.reference} enregistrée.",
+        {"destinataire": email, "fournisseur": nom_fournisseur, "objet": objet},
+        artifacts={"reference": commande.reference, "notion_page_id": page_id},
+    )
+
+
 def build_tools(deps: Deps) -> list[BaseTool]:
     async def consulter_boulangerie(
         table: str,
@@ -274,6 +418,11 @@ def build_tools(deps: Deps) -> list[BaseTool]:
         except NotionIndisponible:
             return notion_indisponible()
 
+    async def passer_commande(
+        fournisseur: str, produits: str, objet: str, corps: str, montant_estime: float | None = None
+    ) -> str:
+        return await _passer_commande(deps, fournisseur, produits, objet, corps, montant_estime)
+
     return [
         StructuredTool.from_function(
             coroutine=consulter_boulangerie,
@@ -293,5 +442,14 @@ def build_tools(deps: Deps) -> list[BaseTool]:
                 "même jour de la semaine sur l'historique, plus 10 % de marge de sécurité."
             ),
             args_schema=PrevoirArgs,
+        ),
+        StructuredTool.from_function(
+            coroutine=passer_commande,
+            name="passer_commande",
+            description=(
+                "Envoie l'email de commande au fournisseur (adresse lue dans le stock) puis enregistre la "
+                "commande. Action irréversible : Madeleine valide le brouillon avant l'exécution."
+            ),
+            args_schema=CommanderArgs,
         ),
     ]
