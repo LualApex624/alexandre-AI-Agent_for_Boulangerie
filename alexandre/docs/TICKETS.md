@@ -58,3 +58,13 @@ Persistance longue des sessions, multi-utilisateur et authentification, ajusteme
 | T12 Évaluations | ✅ hors ligne (dans `pytest`) ; live : 5/6 au premier passage, S4 corrigé et validé sur 1 essai, puis quota Gemini gratuit épuisé (`429`) avant d'atteindre k = 3 |
 | T16 Revue de code | ✅ constats des deux axes traités ; `tools.py` reste un seul module (jugement : le contrat le décrit comme un tout) |
 | T17 Interface sur mesure (maquette) | ✅ remplace l'interface Chainlit de T11 (ADR 0002) : FastAPI + WebSocket, croissant animé selon l'humeur, cartes issues des outils, alerte proactive |
+
+### Validation réelle (09/11/2026)
+
+| Vérification | Résultat |
+|---|---|
+| Lecture Notion réelle (alerte proactive : Beurre AOP sous le seuil) | ✅ |
+| `passer_commande` réel : email via SMTP Mailtrap (sandbox) + ligne dans Commandes Fournisseurs | ✅ référence `CMD-20261109-363C`, statut « Envoyée », mail reçu dans l'inbox sandbox |
+| Échec partiel (email parti, écriture Notion KO) | ✅ test hors ligne (`COMMANDE_NON_TRACEE`) ; non rejoué sur la vraie base pour ne pas la dégrader |
+| Évaluations live k = 3 et conversation Gemini dans la nouvelle interface | ⏳ en attente du quota Gemini |
+| Cahier des charges | Le §9 (Chainlit) est amendé par l'ADR 0002, décision de l'auteur du cahier (gestion agile du périmètre) |

@@ -146,6 +146,10 @@ Détails et preuves : [`alexandre/docs/securite.md`](alexandre/docs/securite.md)
 - Une nouvelle conversation démarre à chaque connexion (rechargement de la page, bouton ↻) : l'historique est gardé tant que la page reste ouverte.
 - Trois outils au lieu de « 4 à 6 fonctions » (§5.2) : la lecture Notion est un outil unique paramétré, ce que le §7.1 autorise, et l'envoi d'email et l'écriture Notion forment un seul outil pour qu'une seule validation couvre les deux (décision D2).
 
+## État de validation
+
+Commande réelle vérifiée de bout en bout le 09/11/2026 (email SMTP Mailtrap sandbox + ligne Notion). Les évaluations live avec k = 3 restent à rejouer quand le quota Gemini le permet (`python -m evals.run_evals --k 3`). Détail dans [`alexandre/docs/TICKETS.md`](alexandre/docs/TICKETS.md).
+
 ## Pistes d'amélioration
 
 - Ajuster la prévision selon la météo ([Open-Meteo](https://open-meteo.com), gratuit, sans clé) : moins de passage les jours de pluie.
