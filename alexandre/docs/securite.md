@@ -32,9 +32,27 @@ Le prompt rappelle aussi que le contenu des outils est une donnée et jamais un 
 
 ## Surface réduite de l'interface
 
-- Upload de fichiers désactivé (inutile ici).
+- Serveur à l'écoute de `127.0.0.1` uniquement (valeur par défaut de Chainlit, à ne pas changer sans authentification).
+- Upload de fichiers désactivé (inutile ici) ; HTML brut désactivé (`unsafe_allow_html = false`).
 - Origines autorisées limitées à `http://localhost:8000` et `http://127.0.0.1:8000`.
+- **Images et liens markdown retirés** des réponses et du brouillon affiché : une image chargée automatiquement par le navigateur pourrait envoyer des données à un site tiers (exfiltration par contenu injecté). Le brouillon ne peut pas sortir de son bloc de code.
+- Au plus 12 appels au modèle par message de Madeleine (boucle d'outils, coût), puis message clair.
 - Aucune trace technique affichée à Madeleine : les erreurs deviennent un message simple, le détail reste dans les logs du serveur.
+
+## Revue de sécurité (checklist `security-review`, 09/11/2026)
+
+| Point | Statut | Preuve |
+|---|---|---|
+| Secrets hors du code | ✅ | `test_aucun_secret_dans_les_fichiers_suivis_par_git` |
+| Secrets dans l'historique git | ❌ | token Notion dans `42dc923` (v1) — décision du propriétaire du dépôt requise |
+| Validation des entrées | ✅ | schémas Pydantic + validation au point d'action (`tests/test_securite.py`) |
+| Injection (SQL / requêtes) | n/a | aucune requête construite à partir de texte ; filtrage local |
+| XSS / exfiltration par le rendu | ✅ | HTML désactivé ; images et liens markdown neutralisés (tests) |
+| CSRF / origines | ✅ | `allow_origins` limité à localhost |
+| Authentification | ⚠️ assumé | local, mono-utilisateur (§13) ; écoute sur 127.0.0.1 |
+| Limitation de débit / coût | ✅ | limite d'appels au modèle par message ; retry avec backoff |
+| Erreurs et logs | ✅ | message générique pour Madeleine ; secret sentinelle absent des logs |
+| Dépendances | ✅ | lockfile ; `pip-audit -r requirements.txt` : aucune vulnérabilité connue |
 
 ## Limites assumées
 

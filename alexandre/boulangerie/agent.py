@@ -15,6 +15,7 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import (
     HumanInTheLoopMiddleware,
     InterruptOnConfig,
+    ModelCallLimitMiddleware,
     ModelFallbackMiddleware,
     ModelRetryMiddleware,
 )
@@ -40,8 +41,10 @@ def build_agent(
     fallback: BaseChatModel | None = None,
     checkpointer: Any | None = None,
     max_retries: int = 2,
+    limite_appels_modele: int = 12,
 ):
-    middleware: list = []
+    # Borne le nombre d'appels au modèle par message de Madeleine (boucle d'outils, coût).
+    middleware: list = [ModelCallLimitMiddleware(run_limit=limite_appels_modele, exit_behavior="error")]
     if fallback is not None:
         middleware.append(ModelFallbackMiddleware(fallback))
     if max_retries > 0:

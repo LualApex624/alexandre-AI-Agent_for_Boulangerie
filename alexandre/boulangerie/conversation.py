@@ -8,6 +8,7 @@ Madeleine ; le détail technique reste dans les logs.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +24,21 @@ MESSAGE_ERREUR = (
     "Oups, je n'arrive pas à réfléchir pour l'instant 🥖 "
     "Réessaie dans une minute ; si ça continue, préviens Théo."
 )
+_IMAGE_MD = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+_LIEN_MD = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+
+
+def securiser_markdown(texte: str) -> str:
+    """Retire images et liens markdown (on garde leur texte) : une image chargée par le
+    navigateur pourrait envoyer des données à un site tiers, un lien pourrait tromper Madeleine."""
+    return _LIEN_MD.sub(r"\1", _IMAGE_MD.sub(r"\1", texte))
+
+
+def securiser_apercu(texte: str) -> str:
+    """Même chose, et empêche de sortir du bloc de code qui encadre le brouillon."""
+    return securiser_markdown(texte).replace("```", "ʼʼʼ")
+
+
 MESSAGE_REFUS = "Madeleine a refusé l'envoi : rien n'a été envoyé ni enregistré."
 
 
@@ -73,11 +89,11 @@ class Conversation:
         args = demande["action_requests"][0]["args"]
         fournisseur = str(args.get("fournisseur", ""))
         return DemandeValidation(
-            fournisseur=fournisseur,
+            fournisseur=securiser_apercu(fournisseur),
             destinataire=await self._destinataire(fournisseur),
-            produits=str(args.get("produits", "")),
-            objet=str(args.get("objet", "")),
-            corps=str(args.get("corps", "")),
+            produits=securiser_apercu(str(args.get("produits", ""))),
+            objet=securiser_apercu(str(args.get("objet", ""))),
+            corps=securiser_apercu(str(args.get("corps", ""))),
             montant_estime=args.get("montant_estime"),
         )
 
@@ -94,5 +110,5 @@ class Conversation:
     def _dernier_texte(etat: dict) -> str:
         for message in reversed(etat.get("messages", [])):
             if isinstance(message, AIMessage) and message.text.strip():
-                return message.text
+                return securiser_markdown(message.text)
         return MESSAGE_ERREUR
