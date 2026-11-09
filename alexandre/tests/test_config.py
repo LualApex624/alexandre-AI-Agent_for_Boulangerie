@@ -111,3 +111,40 @@ def test_le_port_du_serveur_vaut_8000_par_defaut_et_se_configure():
 def test_un_port_invalide_est_refuse():
     with pytest.raises(ConfigError, match="PORT"):
         Settings.from_env({**ENV_COMPLET, "PORT": "huit-mille"})
+
+
+def test_par_defaut_le_serveur_n_ecoute_qu_en_local():
+    settings = Settings.from_env(ENV_COMPLET)
+
+    assert settings.host == "127.0.0.1"
+    assert settings.access_password is None
+    assert settings.origines_autorisees == ()
+
+
+def test_une_exposition_publique_sans_mot_de_passe_est_refusee():
+    with pytest.raises(ConfigError, match="ACCESS_PASSWORD"):
+        Settings.from_env({**ENV_COMPLET, "HOST": "0.0.0.0"})
+
+
+def test_exposition_publique_avec_mot_de_passe_et_origines():
+    settings = Settings.from_env({
+        **ENV_COMPLET,
+        "HOST": "0.0.0.0",
+        "ACCESS_PASSWORD": "sesame",
+        "ALLOWED_ORIGINS": "https://alexandre.example.com, https://autre.example.com/",
+        "RENDER_EXTERNAL_URL": "https://alexandre.onrender.com",
+    })
+
+    assert settings.host == "0.0.0.0"
+    assert settings.access_password == "sesame"
+    assert settings.origines_autorisees == (
+        "https://alexandre.example.com",
+        "https://autre.example.com",
+        "https://alexandre.onrender.com",
+    )
+
+
+def test_le_mot_de_passe_d_acces_n_apparait_pas_dans_la_representation():
+    settings = Settings.from_env({**ENV_COMPLET, "ACCESS_PASSWORD": "sesame"})
+
+    assert "sesame" not in repr(settings)

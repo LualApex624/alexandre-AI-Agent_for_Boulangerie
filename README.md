@@ -68,6 +68,16 @@ Une page sur mesure, fidèle à la maquette « Alexandre — assistant de boulan
 - **Brouillon de commande** avec le vrai destinataire et les boutons « Envoyer » / « Ne pas envoyer », une décision par commande.
 - **Alerte proactive** à l'ouverture : les ingrédients sous leur seuil, lus directement dans le stock, sans passer par le modèle.
 
+## Déploiement en ligne (Render)
+
+Le serveur sert déjà l'interface : une seule adresse suffit (backend + frontend). `render.yaml` décrit le service.
+
+1. Sur [render.com](https://render.com) : **New + → Blueprint**, choisir ce dépôt.
+2. Saisir les secrets demandés (`NOTION_TOKEN`, 4 `*_DB_ID`, `GOOGLE_API_KEY`, `SMTP_*`). `ACCESS_PASSWORD` est généré par Render (onglet *Environment*).
+3. Ouvrir l'adresse `https://….onrender.com` : le navigateur demande le mot de passe (identifiant libre).
+
+Garde-fous : hors du poste local (`HOST` ≠ `127.0.0.1`), le serveur **refuse de démarrer sans `ACCESS_PASSWORD`** ; la page, les fichiers et le WebSocket exigent ce mot de passe (comparaison à temps constant) ; seule la sonde `/sante` est publique et ne renvoie rien. Sur l'offre gratuite le service s'endort après inactivité (premier chargement lent) et l'historique de conversation est perdu à chaque redémarrage.
+
 ## Architecture
 
 ```

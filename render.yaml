@@ -1,0 +1,42 @@
+# Déploiement Render (Blueprint) : New + → Blueprint → choisir ce dépôt.
+# Les secrets (sync: false) sont saisis dans le tableau de bord Render, jamais dans le dépôt.
+services:
+  - type: web
+    name: alexandre-boulangerie
+    runtime: python
+    rootDir: alexandre
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m boulangerie.serveur
+    healthCheckPath: /sante
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: HOST
+        value: 0.0.0.0
+      - key: ACCESS_PASSWORD
+        generateValue: true # mot de passe d'accès généré par Render, visible dans Environment
+      - key: DATE_REFERENCE
+        value: "2026-02-16"
+      - key: NOTION_TOKEN
+        sync: false
+      - key: STOCK_DB_ID
+        sync: false
+      - key: VENTES_DB_ID
+        sync: false
+      - key: CATALOGUE_DB_ID
+        sync: false
+      - key: COMMANDES_DB_ID
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false

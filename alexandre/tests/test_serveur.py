@@ -142,3 +142,58 @@ def test_un_message_invalide_renvoie_une_erreur_sans_couper_la_connexion(scenari
         _, reponse = _jusqua(ws, "reponse")
 
     assert reponse["texte"] == "Bonjour Madeleine !"
+
+
+# --- Accès protégé (déploiement en ligne) -----------------------------------
+
+import base64
+
+
+def _basic(mot_de_passe: str, utilisateur: str = "madeleine") -> dict:
+    jeton = base64.b64encode(f"{utilisateur}:{mot_de_passe}".encode()).decode()
+    return {"Authorization": f"Basic {jeton}"}
+
+
+@pytest.fixture
+def client_protege(deps):
+    modele = ScriptedChatModel(reponses=[AIMessage(content="Bonjour !")])
+    outils = build_tools(deps)
+    agent = build_agent(modele, outils, DATE_REFERENCE, max_retries=0)
+    runtime = Runtime(
+        creer_conversation=lambda fil: Conversation(agent, thread_id=fil, repo=deps.repo),
+        alerte=creer_alerte(outils),
+        date_reference=DATE_REFERENCE,
+        origines=frozenset({ORIGINE}),
+        mot_de_passe="sesame",
+    )
+    return TestClient(creer_app(runtime))
+
+
+def test_la_page_exige_le_mot_de_passe(client_protege):
+    sans = client_protege.get("/")
+    mauvais = client_protege.get("/", headers=_basic("faux"))
+    bon = client_protege.get("/", headers=_basic("sesame"))
+
+    assert sans.status_code == 401 and "Basic" in sans.headers["www-authenticate"]
+    assert mauvais.status_code == 401
+    assert bon.status_code == 200
+
+
+def test_les_fichiers_statiques_sont_proteges_aussi(client_protege):
+    assert client_protege.get("/static/app.js").status_code == 401
+    assert client_protege.get("/static/app.js", headers=_basic("sesame")).status_code == 200
+
+
+def test_la_sonde_de_sante_reste_publique_et_ne_revele_rien(client_protege):
+    reponse = client_protege.get("/sante")
+
+    assert reponse.status_code == 200 and reponse.json() == {"statut": "ok"}
+
+
+def test_le_websocket_exige_le_mot_de_passe(client_protege):
+    with pytest.raises(WebSocketDisconnect):
+        with client_protege.websocket_connect("/ws", headers={"origin": ORIGINE}):
+            pass
+
+    with client_protege.websocket_connect("/ws", headers={"origin": ORIGINE, **_basic("sesame")}) as ws:
+        assert ws.receive_json()["type"] == "bienvenue"

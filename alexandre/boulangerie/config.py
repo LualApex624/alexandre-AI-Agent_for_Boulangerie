@@ -22,6 +22,7 @@ REQUIRED = (
     "COMMANDES_DB_ID",
     "GOOGLE_API_KEY",
 )
+LOOPBACK = ("127.0.0.1", "localhost", "::1")
 SMTP_VARS = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM")
 
 NOTION_ID = re.compile(r"^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$")
@@ -60,6 +61,9 @@ class Settings:
     mistral_api_key: str | None = field(default=None, repr=False)
     fallback_model: str | None = None
     port: int = 8000
+    host: str = "127.0.0.1"
+    access_password: str | None = field(default=None, repr=False)
+    origines_autorisees: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
@@ -86,6 +90,16 @@ class Settings:
         if not port.isdigit() or not 1 <= int(port) <= 65535:
             errors.append("PORT doit être un numéro de port (1 à 65535)")
             port = "8000"
+
+        host = get("HOST") or "127.0.0.1"
+        access_password = get("ACCESS_PASSWORD") or None
+        if host not in LOOPBACK and not access_password:
+            errors.append("ACCESS_PASSWORD est obligatoire quand HOST n'est pas local (127.0.0.1)")
+        origines = tuple(
+            o.strip().rstrip("/")
+            for o in (get("ALLOWED_ORIGINS").split(",") + [get("RENDER_EXTERNAL_URL")])
+            if o.strip()
+        )
 
         smtp = None
         smtp_present = [name for name in SMTP_VARS if get(name)]
@@ -124,6 +138,9 @@ class Settings:
             mistral_api_key=mistral_key,
             fallback_model=(get("FALLBACK_MODEL") or DEFAULT_FALLBACK_MODEL) if mistral_key else None,
             port=int(port),
+            host=host,
+            access_password=access_password,
+            origines_autorisees=origines,
         )
 
 

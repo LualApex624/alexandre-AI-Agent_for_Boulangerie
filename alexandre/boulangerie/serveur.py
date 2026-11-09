@@ -15,11 +15,14 @@ Protocole (JSON, un objet par trame) :
     {"type": "erreur", "texte": "..."}
 
 Sécurité : origine vérifiée avant d'accepter la connexion, en-têtes CSP stricts,
-écoute sur 127.0.0.1, taille des trames bornée, aucune trace technique envoyée.
+écoute sur 127.0.0.1 par défaut (HOST + ACCESS_PASSWORD obligatoire pour s'exposer), taille des trames bornée, aucune trace technique envoyée.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hmac
 import json
 import logging
 import uuid
@@ -30,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from langchain_core.callbacks import AsyncCallbackHandler
 
@@ -67,6 +70,7 @@ class Runtime:
     alerte: Callable[[], Awaitable[dict | None]]
     date_reference: date
     origines: frozenset[str]
+    mot_de_passe: str | None = None  # None : accès libre (poste local uniquement)
 
 
 def creer_alerte(outils: list) -> Callable[[], Awaitable[dict | None]]:
@@ -131,8 +135,28 @@ def _evenement(reponse: Reponse) -> dict:
     return {"type": "reponse", "texte": reponse.texte or "", "cartes": cartes_depuis(list(reponse.resultats))}
 
 
+def _autorise(runtime: Runtime, en_tete: str | None) -> bool:
+    """Accès Basic : seul le mot de passe compte (l'identifiant est libre), comparé à temps constant."""
+    if runtime.mot_de_passe is None:
+        return True
+    schema, _, jeton = (en_tete or "").partition(" ")
+    if schema.lower() != "basic":
+        return False
+    try:
+        _, _, fourni = base64.b64decode(jeton, validate=True).decode("utf-8").partition(":")
+    except (binascii.Error, UnicodeDecodeError):
+        return False
+    return hmac.compare_digest(fourni.encode(), runtime.mot_de_passe.encode())
+
+
 def creer_app(runtime: Runtime) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+    @app.middleware("http")
+    async def acces_protege(request: Request, call_next):
+        if request.url.path == "/sante" or _autorise(runtime, request.headers.get("authorization")):
+            return await call_next(request)
+        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="Alexandre", charset="UTF-8"'})
 
     @app.middleware("http")
     async def entetes_de_securite(request: Request, call_next):
@@ -145,6 +169,10 @@ def creer_app(runtime: Runtime) -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=DOSSIER_WEB), name="static")
 
+    @app.get("/sante")
+    async def sante() -> dict:
+        return {"statut": "ok"}
+
     @app.get("/")
     async def accueil() -> FileResponse:
         return FileResponse(DOSSIER_WEB / "index.html")
@@ -152,7 +180,9 @@ def creer_app(runtime: Runtime) -> FastAPI:
     @app.websocket("/ws")
     async def ws(websocket: WebSocket) -> None:
         # Protection contre le détournement de WebSocket depuis un autre site (CSWSH).
-        if websocket.headers.get("origin") not in runtime.origines:
+        if websocket.headers.get("origin") not in runtime.origines or not _autorise(
+            runtime, websocket.headers.get("authorization")
+        ):
             await websocket.close(code=1008)
             return
         await websocket.accept()
@@ -214,7 +244,10 @@ def construire_runtime():
         creer_conversation=lambda fil: Conversation(agent, thread_id=fil, repo=repo),
         alerte=creer_alerte(outils),
         date_reference=settings.date_reference,
-        origines=frozenset({f"http://localhost:{settings.port}", f"http://127.0.0.1:{settings.port}"}),
+        origines=frozenset(
+            {f"http://localhost:{settings.port}", f"http://127.0.0.1:{settings.port}", *settings.origines_autorisees}
+        ),
+        mot_de_passe=settings.access_password,
     )
 
 
@@ -223,8 +256,15 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
     settings, runtime = construire_runtime()
-    print(f"\n  Alexandre est prêt : http://localhost:{settings.port}\n", flush=True)
-    uvicorn.run(creer_app(runtime), host="127.0.0.1", port=settings.port, log_level="warning")
+    print(f"\n  Alexandre est prêt : http://localhost:{settings.port} (écoute sur {settings.host})\n", flush=True)
+    uvicorn.run(
+        creer_app(runtime),
+        host=settings.host,
+        port=settings.port,
+        log_level="warning",
+        proxy_headers=True,
+        forwarded_allow_ips="*",  # derrière le proxy HTTPS de l'hébergeur
+    )
 
 
 if __name__ == "__main__":
