@@ -13,7 +13,9 @@ from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
 from boulangerie.envelope import arrondi, avertissement, erreur, notion_indisponible, succes
+from boulangerie.forecast import COEFFICIENT, OBSERVATIONS_MINIMALES, fenetre, prevoir
 from boulangerie.notion_repo import NotionIndisponible, NotionRepository
+from boulangerie.prompt import jour_fr
 
 
 class Mailer(Protocol):
@@ -185,6 +187,56 @@ async def _consulter_catalogue(deps: Deps, recherche: str | None) -> str:
     return succes(f"{len(items)} produit(s) trouvé(s) dans le catalogue.", data)
 
 
+# --- Outil 3 : prevoir_production ----------------------------------------------
+
+class PrevoirArgs(BaseModel):
+    date_cible: date = Field(
+        description="Jour à préparer, AAAA-MM-JJ. Convertis « demain » avec le calendrier du prompt."
+    )
+    produit: str | None = Field(
+        default=None, description="Mot-clé du produit (ex. 'baguette'). Laisser vide pour tous les produits."
+    )
+    fenetre_jours: int = Field(
+        default=28, ge=7, le=90, description="Nombre de jours d'historique pris en compte avant la date cible."
+    )
+
+
+async def _prevoir_production(deps: Deps, date_cible: date, produit: str | None, fenetre_jours: int) -> str:
+    ventes = [v for v in await deps.repo.lister_ventes() if correspond(produit, v.produit)]
+    lignes = prevoir(ventes, date_cible, fenetre_jours)
+    debut, fin = fenetre(date_cible, fenetre_jours)
+    jour = jour_fr(date_cible)
+    data = {
+        "date_cible": date_cible.isoformat(),
+        "jour": jour,
+        "fenetre": {"debut": debut.isoformat(), "fin": fin.isoformat()},
+        "coefficient": COEFFICIENT,
+        "produits": [
+            {
+                "produit": l.produit,
+                "observations": l.observations,
+                "moyenne": arrondi(l.moyenne),
+                "recommandation": l.recommandation,
+            }
+            for l in lignes
+        ],
+    }
+    if not lignes:
+        return avertissement(
+            f"Aucune vente un {jour} entre le {debut} et le {fin} : pas de prévision possible.",
+            data,
+            next_actions=["Dis à Madeleine qu'il n'y a pas d'historique pour ce jour ; ne propose aucune quantité."],
+        )
+    if any(l.observations < OBSERVATIONS_MINIMALES for l in lignes):
+        return avertissement(
+            f"Prévision pour le {jour} {date_cible} calculée sur peu de {jour}s "
+            f"(moins de {OBSERVATIONS_MINIMALES} observations) : estimation fragile.",
+            data,
+            next_actions=["Donne les recommandations en précisant que l'estimation est fragile."],
+        )
+    return succes(f"Prévision pour le {jour} {date_cible} : moyenne des {jour}s + 10 %.", data)
+
+
 def build_tools(deps: Deps) -> list[BaseTool]:
     async def consulter_boulangerie(
         table: str,
@@ -216,6 +268,12 @@ def build_tools(deps: Deps) -> list[BaseTool]:
         except NotionIndisponible:
             return notion_indisponible()
 
+    async def prevoir_production(date_cible: date, produit: str | None = None, fenetre_jours: int = 28) -> str:
+        try:
+            return await _prevoir_production(deps, date_cible, produit, fenetre_jours)
+        except NotionIndisponible:
+            return notion_indisponible()
+
     return [
         StructuredTool.from_function(
             coroutine=consulter_boulangerie,
@@ -226,5 +284,14 @@ def build_tools(deps: Deps) -> list[BaseTool]:
                 "des produits (prix, coût de revient, marge). Seule source autorisée pour ces chiffres."
             ),
             args_schema=ConsulterArgs,
-        )
+        ),
+        StructuredTool.from_function(
+            coroutine=prevoir_production,
+            name="prevoir_production",
+            description=(
+                "Estime combien préparer de chaque produit pour un jour donné : moyenne des ventes du "
+                "même jour de la semaine sur l'historique, plus 10 % de marge de sécurité."
+            ),
+            args_schema=PrevoirArgs,
+        ),
     ]
