@@ -26,6 +26,8 @@ htmlcov/
 
 # === Chainlit ===
 .chainlit/.langchain.db
+# Config Chainlit générée par défaut si on lance chainlit depuis la racine
+/.chainlit/
 .files/
 
 # === Rapports d'évaluation générés ===
