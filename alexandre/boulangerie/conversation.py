@@ -7,14 +7,16 @@ Madeleine ; le détail technique reste dans les logs.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 
+from boulangerie.cartes import ResultatOutil
 from boulangerie.notion_repo import NotionIndisponible, NotionRepository
 from boulangerie.tools import CLE_VALIDATION, trouver_fournisseur
 
@@ -56,6 +58,7 @@ class DemandeValidation:
 class Reponse:
     texte: str | None
     validations: tuple[DemandeValidation, ...] = ()  # commandes en attente de Madeleine, dans l'ordre
+    resultats: tuple[ResultatOutil, ...] = ()  # résultats d'outils depuis le dernier message de Madeleine
 
 
 class Conversation:
@@ -94,7 +97,7 @@ class Conversation:
             self._en_attente = len(demandes)
             return Reponse(texte=None, validations=tuple([await self._apercu(d["args"]) for d in demandes]))
         self._en_attente = 0
-        return Reponse(texte=self._dernier_texte(etat))
+        return Reponse(texte=self._dernier_texte(etat), resultats=self._resultats_du_tour(etat))
 
     async def _apercu(self, args: dict) -> DemandeValidation:
         fournisseur = str(args.get("fournisseur", ""))
@@ -115,6 +118,21 @@ class Conversation:
         except NotionIndisponible:
             return None
         return trouve.email if trouve else None
+
+    @staticmethod
+    def _resultats_du_tour(etat: dict) -> tuple[ResultatOutil, ...]:
+        resultats: list[ResultatOutil] = []
+        for message in reversed(etat.get("messages", [])):
+            if isinstance(message, HumanMessage):
+                break
+            if isinstance(message, ToolMessage):
+                try:
+                    enveloppe = json.loads(message.content)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(enveloppe, dict):
+                    resultats.append(ResultatOutil(message.name or "", enveloppe))
+        return tuple(reversed(resultats))
 
     @staticmethod
     def _dernier_texte(etat: dict) -> str:
