@@ -27,7 +27,7 @@ def test_charge_une_configuration_complete_avec_les_valeurs_par_defaut():
 
     assert settings.stock_db_id == "db-stock"
     assert settings.smtp is not None and settings.smtp.port == 587
-    assert settings.llm_model == "gemini-2.5-flash"
+    assert settings.llm_model == "gemini-3.5-flash"
     assert settings.date_reference == date(2026, 2, 16)
     assert settings.fallback_model is None
 

@@ -23,7 +23,7 @@ REQUIRED = (
 )
 SMTP_VARS = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM")
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash"
 DEFAULT_FALLBACK_MODEL = "mistral-small-latest"
 DEFAULT_DATE_REFERENCE = "2026-02-16"
 
@@ -114,7 +114,7 @@ class Settings:
 
 def load_settings() -> Settings:
     """Charge `.env` (sans écraser l'environnement existant) puis valide."""
-    from dotenv import load_dotenv
+    from dotenv import find_dotenv, load_dotenv
 
-    load_dotenv(override=False)
+    load_dotenv(find_dotenv(usecwd=True), override=False)
     return Settings.from_env(os.environ)

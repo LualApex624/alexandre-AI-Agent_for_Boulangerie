@@ -1,0 +1,199 @@
+/* ============================================================
+   Alexandre — Boulangerie artisanale moderne
+   Direction visuelle appliquée par-dessus le thème Chainlit.
+   Les couleurs de base vivent dans public/theme.json (variables
+   shadcn). Ce fichier ne fait qu'affiner la mise en forme :
+   typographie, bulles, starters, champ de saisie, avatar.
+   On reste volontairement léger pour ne pas casser l'UI ni
+   masquer les appels d'outils.
+   ============================================================ */
+
+:root {
+    --fournil-primary: #c97022;        /* caramel */
+    --fournil-secondary: #8a4516;      /* caramel foncé / croûte */
+    --fournil-tertiary: #241a14;       /* cacao brûlé */
+    --fournil-cream: #f8ead2;          /* crème chaude */
+    --fournil-surface: #fff8ed;        /* surface claire */
+    --fournil-bubble: #fff3dd;         /* miel doux (bulle assistant) */
+    --fournil-bubble-user: #f4e6d2;    /* crème (bulle utilisateur) */
+    --fournil-text: #2b160c;           /* chocolat */
+    --fournil-text-soft: #7a6656;      /* grain doux */
+    --fournil-border: #e1b875;         /* bordure dorée */
+    --fournil-border-soft: #ecd3a6;    /* bordure dorée adoucie */
+
+    --loading-cursor-color: #c97022;
+    --loading-cursor-size: 1rem;
+    --loading-cursor-animation: gustavePulse 1.4s ease-in-out infinite;
+}
+
+/* --- Typographie -------------------------------------------------- */
+body {
+    font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+}
+
+/* Titres éditoriaux en serif (accueil + en-têtes markdown) */
+#welcome-screen h1,
+#welcome-screen h2,
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    letter-spacing: -0.01em;
+}
+
+/* --- Logo & avatar : discrets ------------------------------------ */
+/* Logo d'en-tête : petit et rond */
+img[alt="logo"] {
+    max-height: 30px;
+    width: auto;
+    border-radius: 9999px;
+}
+
+/* Logo héros de l'écran d'accueil : présent mais sobre, pas envahissant */
+#welcome-screen img[alt="logo"] {
+    max-height: 84px;
+    border: 1px solid var(--fournil-border-soft);
+    box-shadow: 0 2px 8px rgba(43, 22, 12, 0.08);
+}
+
+/* Étiquette d'auteur au-dessus des bulles ("Gustave" / "Madeleine") */
+.message-name {
+    color: var(--fournil-text-soft) !important;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: none;
+}
+
+/* --- Bulles de messages ------------------------------------------ */
+/* On cible UNIQUEMENT les messages, pas les étapes d'outils
+   (data-step-type="tool" / "run"), pour garder les tool calls visibles.
+
+   - Le message UTILISATEUR possède déjà sa bulle native (.bg-accent
+     .rounded-3xl) : elle prend automatiquement la couleur crème via
+     --accent / --accent-foreground définis dans theme.json. On ne lui
+     ajoute donc PAS de second cadre, juste une bordure dorée discrète.
+   - Le message ASSISTANT est plat par défaut : on lui donne la bulle
+     miel qui épouse le contenu (.message-content est w-full -> fit). */
+
+/* Bulle assistant : miel doux, bordure dorée, épouse le texte */
+.step[data-step-type="assistant_message"] .message-content {
+    width: fit-content;
+    max-width: 100%;
+    background: var(--fournil-bubble);
+    border: 1px solid var(--fournil-border-soft);
+    border-radius: 18px;
+    border-top-left-radius: 6px;
+    padding: 14px 18px;
+    box-shadow: 0 1px 2px rgba(43, 22, 12, 0.05);
+    color: var(--fournil-text);
+}
+
+/* Bulle utilisateur native : on affine seulement la bordure dorée */
+.step[data-step-type="user_message"] .bg-accent {
+    border: 1px solid rgba(201, 112, 34, 0.22);
+    box-shadow: 0 1px 2px rgba(43, 22, 12, 0.05);
+}
+
+/* Espacement vertical généreux entre les messages */
+.step.py-2 {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+/* Liens lisibles, ton caramel foncé */
+.message-content a {
+    color: var(--fournil-secondary);
+    text-decoration-color: rgba(138, 69, 22, 0.4);
+}
+
+/* --- Starters / boutons de suggestion ---------------------------- */
+/* Pastilles propres et discrètes (bordure douce, fond clair) */
+[id^="starter-"] {
+    background: var(--fournil-surface) !important;
+    border: 1px solid var(--fournil-border-soft) !important;
+    border-radius: 9999px !important;
+    color: var(--fournil-text-soft) !important;
+    box-shadow: none !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+[id^="starter-"]:hover {
+    background: #f3e6cc !important;
+    border-color: var(--fournil-border) !important;
+    color: var(--fournil-secondary) !important;
+}
+
+/* --- Champ de saisie --------------------------------------------- */
+/* Composer arrondi, clair, lisible */
+#message-composer {
+    background: #fffdf8 !important;
+    border: 1px solid var(--fournil-border) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 2px 10px rgba(43, 22, 12, 0.06) !important;
+}
+
+#message-composer:focus-within {
+    border-color: var(--fournil-primary) !important;
+    box-shadow: 0 0 0 3px rgba(201, 112, 34, 0.16) !important;
+}
+
+#chat-input,
+#chat-input::placeholder {
+    color: var(--fournil-text);
+}
+
+#chat-input::placeholder {
+    color: rgba(122, 102, 86, 0.75);
+}
+
+/* Bouton d'envoi : caramel foncé, rond, tactile */
+#chat-submit {
+    background: var(--fournil-secondary) !important;
+    color: #fff8ed !important;
+    border-radius: 9999px !important;
+    border: none !important;
+}
+
+#chat-submit:hover:not(:disabled) {
+    background: #74380f !important;
+}
+
+#chat-submit:disabled {
+    background: rgba(138, 69, 22, 0.35) !important;
+    color: #fff8ed !important;
+}
+
+/* --- Détails ----------------------------------------------------- */
+/* Barre de défilement fine et dorée */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--fournil-border-soft);
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--fournil-border);
+}
+
+::selection {
+    background: rgba(201, 112, 34, 0.22);
+}
+
+/* Curseur de chargement */
+@keyframes gustavePulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.45;
+        transform: scale(0.85);
+    }
+}
