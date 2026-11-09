@@ -1,4 +1,4 @@
-# La Boulangère Augmentée — Alexandre 🥐
+# La Boulangère Augmentée Alexandre 🥐
 
 Assistant IA conversationnel pour **Madeleine Croûton**, boulangère à Saint-Germain-des-Croissants. Alexandre lit ses stocks, ses ventes et son catalogue dans Notion, lui dit combien préparer pour le lendemain et prépare ses commandes fournisseurs : l'email ne part et la commande n'est enregistrée **qu'après son clic sur « Envoyer »**.
 
