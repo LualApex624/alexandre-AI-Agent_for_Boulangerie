@@ -63,7 +63,12 @@ def build_chat_models(settings: Settings) -> tuple[BaseChatModel, BaseChatModel 
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     principal = ChatGoogleGenerativeAI(
-        model=settings.llm_model, google_api_key=settings.google_api_key, temperature=0
+        model=settings.llm_model,
+        google_api_key=settings.google_api_key,
+        temperature=0,
+        # Quota épuisé (429) : inutile d'attendre des relances, l'erreur claire est préférable.
+        max_retries=1,
+        timeout=30,
     )
     secours = None
     if settings.mistral_api_key and settings.fallback_model:

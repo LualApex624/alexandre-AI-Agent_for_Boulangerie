@@ -148,3 +148,13 @@ def test_le_mot_de_passe_d_acces_n_apparait_pas_dans_la_representation():
     settings = Settings.from_env({**ENV_COMPLET, "ACCESS_PASSWORD": "sesame"})
 
     assert "sesame" not in repr(settings)
+
+
+def test_le_client_gemini_echoue_vite_quand_le_quota_est_epuise():
+    from boulangerie.agent import build_chat_models
+
+    principal, _ = build_chat_models(Settings.from_env(ENV_COMPLET))
+
+    # Défaut de la bibliothèque : 6 relances (plus d'une minute avant l'erreur).
+    assert principal.max_retries == 1
+    assert principal.timeout == 30
