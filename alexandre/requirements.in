@@ -1,0 +1,15 @@
+# Dépendances directes d'Alexandre. Le fichier requirements.txt est le
+# lockfile (toutes les versions figées) : régénérer avec
+#   pip install -r requirements.in && pip freeze --exclude-editable > requirements.txt
+chainlit
+langchain
+langgraph
+langchain-google-genai
+langchain-mistralai
+notion-client
+pandas
+python-dotenv
+# Tests
+pytest
+pytest-asyncio
+pytest-cov

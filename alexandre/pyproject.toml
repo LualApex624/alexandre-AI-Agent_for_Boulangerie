@@ -1,0 +1,22 @@
+[project]
+name = "alexandre"
+version = "2.0.0"
+description = "Alexandre — assistant IA de la boulangerie Chez Madeleine (v2 de Gustave)"
+requires-python = ">=3.12"
+readme = "../README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "evals"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["--strict-markers", "-m", "not live"]
+markers = [
+    "live: appelle les vrais services (Gemini, Notion) ; lancer avec -m live",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["boulangerie"]
