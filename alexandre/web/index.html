@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>Alexandre — assistant de boulangerie</title>
+  <link rel="icon" href="/static/avatar.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="entete">
+      <div class="avatar humeur-repos" id="avatar" aria-hidden="true"></div>
+      <div class="identite">
+        <h1>Alexandre</h1>
+        <p class="statut"><span class="pastille" id="pastille"></span><span id="statut">Connexion au fournil…</span></p>
+      </div>
+      <button class="bouton-icone" id="nouvelle" type="button" aria-label="Nouvelle conversation" title="Nouvelle conversation">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v4.5h4.5"/></svg>
+      </button>
+    </header>
+
+    <main class="fil" id="fil">
+      <div class="fil-contenu">
+        <p class="pastille-date" id="date" hidden></p>
+        <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <div class="message bot frappe" id="frappe" hidden>
+          <div class="bulle bulle-frappe">
+            <span class="bulles" aria-hidden="true"><span class="point"></span><span class="point"></span><span class="point"></span></span>
+            <span>Alexandre pétrit sa réponse…</span>
+          </div>
+          <ul class="etapes" id="etapes" aria-label="Ce qu'Alexandre consulte"></ul>
+        </div>
+      </div>
+    </main>
+
+    <footer class="saisie">
+      <div class="puces" id="puces" aria-label="Suggestions"></div>
+      <form class="formulaire" id="formulaire" autocomplete="off">
+        <label for="champ" class="visuellement-cache">Message pour Alexandre</label>
+        <input id="champ" type="text" maxlength="2000" placeholder="Demande à Alexandre…" enterkeyhint="send">
+        <button class="bouton-envoyer" id="envoyer" type="submit" aria-label="Envoyer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </form>
+    </footer>
+  </div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

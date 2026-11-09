@@ -68,6 +68,11 @@ class Conversation:
         self._config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
         self._en_attente = 0
 
+    @property
+    def en_attente(self) -> int:
+        """Nombre de commandes qui attendent la décision de Madeleine."""
+        return self._en_attente
+
     async def envoyer(self, message: str, callbacks: list | None = None) -> Reponse:
         return await self._executer({"messages": [HumanMessage(content=message)]}, callbacks)
 

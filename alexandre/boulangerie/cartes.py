@@ -146,5 +146,10 @@ def _carte(resultat: ResultatOutil) -> dict | None:
 
 
 def cartes_depuis(resultats: list[ResultatOutil]) -> list[dict]:
-    """Une carte par résultat utile, dans l'ordre des appels (3 au plus)."""
-    return [carte for carte in map(_carte, resultats) if carte][:3]
+    """Une carte par résultat utile, dans l'ordre des appels (3 au plus).
+
+    Après une commande, seule sa confirmation est montrée : les lectures qui
+    l'ont préparée (recherche du fournisseur) n'apporteraient que du bruit."""
+    cartes = [carte for carte in map(_carte, resultats) if carte]
+    commandes = [c for c in cartes if c["type"] == "commande"]
+    return (commandes or cartes)[:3]

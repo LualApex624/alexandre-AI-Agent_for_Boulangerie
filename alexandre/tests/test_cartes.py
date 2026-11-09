@@ -110,3 +110,15 @@ async def test_la_conversation_expose_les_resultats_d_outils_du_tour_courant_seu
 
     assert [(r.outil, r.enveloppe["status"]) for r in premier.resultats] == [("consulter_boulangerie", "success")]
     assert second.resultats == ()
+
+
+async def test_apres_une_commande_seule_la_confirmation_est_affichee(appeler):
+    stock = await appeler("consulter_boulangerie", table="stock")
+    commande = await appeler(
+        "passer_commande", fournisseur="Minoterie Dupont", produits="50 kg de Farine T65",
+        objet="Commande", corps="Madame, Monsieur,\nMerci.",
+    )
+
+    cartes = cartes_depuis([ResultatOutil("consulter_boulangerie", stock), ResultatOutil("passer_commande", commande)])
+
+    assert [c["type"] for c in cartes] == ["commande"]

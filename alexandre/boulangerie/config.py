@@ -59,6 +59,7 @@ class Settings:
     google_api_key: str = field(repr=False)
     mistral_api_key: str | None = field(default=None, repr=False)
     fallback_model: str | None = None
+    port: int = 8000
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Settings:
@@ -80,6 +81,11 @@ class Settings:
         except ValueError:
             errors.append("DATE_REFERENCE doit être au format AAAA-MM-JJ")
             date_reference = date.fromisoformat(DEFAULT_DATE_REFERENCE)
+
+        port = get("PORT") or "8000"
+        if not port.isdigit() or not 1 <= int(port) <= 65535:
+            errors.append("PORT doit être un numéro de port (1 à 65535)")
+            port = "8000"
 
         smtp = None
         smtp_present = [name for name in SMTP_VARS if get(name)]
@@ -117,6 +123,7 @@ class Settings:
             google_api_key=get("GOOGLE_API_KEY"),
             mistral_api_key=mistral_key,
             fallback_model=(get("FALLBACK_MODEL") or DEFAULT_FALLBACK_MODEL) if mistral_key else None,
+            port=int(port),
         )
 
 

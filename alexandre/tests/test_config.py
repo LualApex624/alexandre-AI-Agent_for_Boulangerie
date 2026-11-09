@@ -101,3 +101,13 @@ def test_le_prompt_respecte_la_taille_demandee_par_le_cahier_des_charges():
     lignes = [l for l in render_system_prompt(date(2026, 2, 16)).splitlines() if l.strip()]
 
     assert 80 <= len(lignes) <= 120
+
+
+def test_le_port_du_serveur_vaut_8000_par_defaut_et_se_configure():
+    assert Settings.from_env(ENV_COMPLET).port == 8000
+    assert Settings.from_env({**ENV_COMPLET, "PORT": "8123"}).port == 8123
+
+
+def test_un_port_invalide_est_refuse():
+    with pytest.raises(ConfigError, match="PORT"):
+        Settings.from_env({**ENV_COMPLET, "PORT": "huit-mille"})
