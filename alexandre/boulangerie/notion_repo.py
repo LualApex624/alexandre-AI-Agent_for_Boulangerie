@@ -22,6 +22,7 @@ from notion_client.errors import NotionClientErrorBase
 log = logging.getLogger(__name__)
 
 PAGE_SIZE = 100
+ERREURS_NOTION = (NotionClientErrorBase, httpx.HTTPError, KeyError, IndexError, TypeError)
 TEXTE_MAX = 500
 MARQUEUR_TRONQUE = "…[tronqué]"
 
@@ -95,7 +96,7 @@ class NouvelleCommande:
     email: str
     produits: str
     montant_estime: float | None
-    notes: str
+    corps: str  # corps de l'email, copié dans la colonne « Notes »
 
 
 # --- Lecture tolérante des propriétés Notion -----------------------------------
@@ -122,7 +123,9 @@ def _select(prop: dict | None) -> str | None:
 
 
 def _date(prop: dict | None) -> str | None:
-    return ((prop or {}).get("date") or {}).get("start")
+    """Jour au format AAAA-MM-JJ (Notion peut ajouter une heure)."""
+    debut = nettoyer(((prop or {}).get("date") or {}).get("start"))
+    return debut[:10] if debut else None
 
 
 def _email(prop: dict | None) -> str | None:
@@ -157,7 +160,7 @@ class NotionRepository:
                 if not reponse.get("has_more"):
                     return pages
                 curseur = reponse["next_cursor"]
-        except (NotionClientErrorBase, httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+        except ERREURS_NOTION as exc:
             log.warning("Lecture Notion impossible (%s) : %s", database_id, type(exc).__name__)
             raise NotionIndisponible from exc
 
@@ -237,7 +240,7 @@ class NotionRepository:
             "Fournisseur": {"select": {"name": commande.fournisseur}},
             "Email envoyé à": {"email": commande.email},
             "Produits commandés": texte(commande.produits),
-            "Notes": texte(commande.notes),
+            "Notes": texte(commande.corps),
             "Statut": {"select": {"name": "Envoyée"}},
         }
         if commande.montant_estime is not None:
@@ -249,6 +252,6 @@ class NotionRepository:
                 properties=proprietes,
             )
             return page["id"]
-        except (NotionClientErrorBase, httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
+        except ERREURS_NOTION as exc:
             log.error("Écriture de la commande %s impossible : %s", commande.reference, type(exc).__name__)
             raise NotionIndisponible from exc

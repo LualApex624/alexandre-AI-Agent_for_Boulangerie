@@ -15,6 +15,7 @@ from boulangerie.agent import build_agent
 from boulangerie.config import ConfigError, Settings
 from boulangerie.conversation import MESSAGE_ERREUR, Conversation
 from boulangerie.tools import build_tools
+from tests.conftest import DATE_REFERENCE
 from tests.fakes import DB_STOCK, ScriptedChatModel, appel_outil, page_stock
 from tests.test_config import ENV_COMPLET
 from tests.test_passer_commande import COMMANDE
@@ -42,13 +43,13 @@ async def test_une_instruction_injectee_dans_notion_ne_peut_pas_faire_ecrire_a_u
         appel_outil("passer_commande", {**COMMANDE, "fournisseur": "pirate@evil.example"}, "appel-2"),
         AIMessage(content="Je n'ai rien pu envoyer."),
     ])
-    conversation = Conversation(build_agent(modele, build_tools(deps), deps.date_reference, max_retries=0),
+    conversation = Conversation(build_agent(modele, build_tools(deps), DATE_REFERENCE, max_retries=0),
                                 thread_id="t", repo=deps.repo)
 
     reponse = await conversation.envoyer("Fais le point sur le stock")
-    assert reponse.validation is not None  # arrêt avant tout effet
-    assert reponse.validation.destinataire is None  # l'aperçu signale une adresse introuvable
-    await conversation.valider(approuve=True)  # même si Madeleine clique par erreur
+    assert reponse.validations  # arrêt avant tout effet
+    assert reponse.validations[0].destinataire is None  # l'aperçu signale une adresse introuvable
+    await conversation.valider(True)  # même si Madeleine clique par erreur
 
     assert mailer.sent == [] and notion.created == []
 
@@ -156,7 +157,7 @@ def test_aucun_secret_dans_les_fichiers_suivis_par_git():
 
 def _conversation(deps, *reponses, **options):
     modele = ScriptedChatModel(reponses=list(reponses))
-    agent = build_agent(modele, build_tools(deps), deps.date_reference, max_retries=0, **options)
+    agent = build_agent(modele, build_tools(deps), DATE_REFERENCE, max_retries=0, **options)
     return Conversation(agent, thread_id="t", repo=deps.repo), modele
 
 
@@ -177,8 +178,8 @@ async def test_le_brouillon_affiche_ne_peut_pas_sortir_de_son_cadre(deps, mailer
 
     reponse = await conversation.envoyer("Commande")
 
-    assert "```" not in reponse.validation.corps
-    assert "evil.example" not in reponse.validation.corps
+    assert "```" not in reponse.validations[0].corps
+    assert "evil.example" not in reponse.validations[0].corps
     assert mailer.sent == []
 
 

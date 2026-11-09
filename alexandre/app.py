@@ -41,7 +41,6 @@ def _runtime() -> tuple[Settings, NotionRepository, object]:
     deps = Deps(
         repo=repo,
         mailer=SmtpMailer(settings.smtp) if settings.smtp else None,
-        date_reference=settings.date_reference,
         trace_dir=settings.trace_dir,
     )
     principal, secours = build_chat_models(settings)
@@ -112,8 +111,8 @@ async def repondre(message: cl.Message) -> None:
         return
 
     reponse: Reponse = await conversation.envoyer(message.content, callbacks=[cl.LangchainCallbackHandler()])
-    # Tant que l'agent demande une validation, on la soumet à Madeleine.
-    while reponse.validation is not None:
-        approuve = await _demander_validation(reponse.validation)
-        reponse = await conversation.valider(approuve, callbacks=[cl.LangchainCallbackHandler()])
+    # Tant que l'agent demande des validations, on soumet chaque commande à Madeleine.
+    while reponse.validations:
+        approbations = [await _demander_validation(demande) for demande in reponse.validations]
+        reponse = await conversation.valider(approbations, callbacks=[cl.LangchainCallbackHandler()])
     await cl.Message(author=AUTEUR, content=reponse.texte or "").send()

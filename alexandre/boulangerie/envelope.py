@@ -27,8 +27,13 @@ def succes(summary: str, data: Any = None, next_actions=None, artifacts=None) ->
     return _enveloppe("success", summary, data, next_actions, artifacts, None)
 
 
-def avertissement(summary: str, data: Any = None, next_actions=None, artifacts=None) -> str:
-    return _enveloppe("warning", summary, data, next_actions, artifacts, None)
+def detail_erreur(code: str, *, cause: str, retry: str, stop: str) -> dict[str, str]:
+    return {"code": code, "cause": cause, "retry": retry, "stop": stop}
+
+
+def avertissement(summary: str, data: Any = None, next_actions=None, artifacts=None, error=None) -> str:
+    """`error` sert aux cas partiels (ex. email parti mais commande non notée)."""
+    return _enveloppe("warning", summary, data, next_actions, artifacts, error)
 
 
 def erreur(
@@ -48,7 +53,7 @@ def erreur(
         data,
         next_actions,
         artifacts,
-        {"code": code, "cause": cause, "retry": retry, "stop": stop},
+        detail_erreur(code, cause=cause, retry=retry, stop=stop),
     )
 
 

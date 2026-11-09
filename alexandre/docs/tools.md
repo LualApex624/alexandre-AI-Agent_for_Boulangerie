@@ -9,7 +9,7 @@ Trois outils, un par besoin du cahier des charges (§7). Ce document fixe leurs 
 3. **Une seule forme de résultat** pour les trois outils (enveloppe JSON ci-dessous), quel que soit le cas : succès, avertissement ou erreur.
 4. **Les chiffres viennent de `data`** et seulement de là. Le prompt interdit d'en donner un qui n'y figure pas ; les évaluations le vérifient.
 5. **Le contenu lu dans Notion est une donnée non fiable** : il est rangé dans `data` et ne doit jamais être interprété comme une instruction.
-6. **Jamais d'exception vers le modèle ou l'interface** : toute erreur devient une enveloppe `status: "error"` avec un code, une cause, une consigne de reprise et une condition d'arrêt.
+6. **Jamais d'exception vers le modèle ou l'interface** : toute erreur devient une enveloppe `status: "error"` avec un code, une cause, une consigne de reprise et une condition d'arrêt. Cela vaut aussi pour un argument hors schéma (type, borne, valeur non prévue) : les trois outils renvoient alors `PARAMETRE_INVALIDE`.
 
 ## Enveloppe de résultat
 
@@ -66,7 +66,7 @@ Toutes les lignes sont lues avec pagination (`has_more` / `next_cursor`) puis fi
 
 ## Outil 2 — `passer_commande` (email SMTP + écriture Notion, F04)
 
-**Action irréversible.** Le graphe s'interrompt **avant** son exécution et attend la validation de Madeleine dans l'interface (D1). Une seule validation couvre l'envoi et l'écriture (D2).
+**Action irréversible.** Le graphe s'interrompt **avant** son exécution et attend la validation de Madeleine dans l'interface (D1). Une seule validation couvre l'envoi et l'écriture (D2). Si le modèle demande plusieurs commandes dans le même message, chacune est présentée et validée séparément. En défense en profondeur, l'outil refuse aussi de s'exécuter sans le jeton `validation_madeleine` que l'interface ne pose qu'au clic.
 
 | Paramètre | Type | Règle |
 |---|---|---|
@@ -83,7 +83,11 @@ Déroulé : résolution du fournisseur → envoi SMTP (STARTTLS) → `pages.crea
 | Cas | Status | `artifacts` | Consigne |
 |---|---|---|---|
 | Succès | success | `reference`, `notion_page_id` | Dire que l'email est parti et que la commande est notée. |
+| `VALIDATION_REQUISE` | error | — | L'outil a été appelé sans le jeton posé par le clic de Madeleine : rien n'est fait. Lui demander si elle veut envoyer. |
+| `PARAMETRE_INVALIDE` | error | — | Objet, corps, produits ou fournisseur vide, trop long ou objet sur plusieurs lignes. Corriger une fois. |
+| `EMAIL_NON_CONFIGURE` | error | — | Pas de SMTP configuré : rien n'est envoyé ni noté. Proposer de donner le texte du mail. |
 | `FOURNISSEUR_INCONNU` | error | — | Rien n'a été envoyé. `data.fournisseurs_connus` liste les noms valides ; reproposer la commande. |
+| `FOURNISSEUR_SANS_EMAIL` | error | — | Adresse absente ou invalide dans le stock : rien n'est envoyé. Demander de compléter la fiche. |
 | `EMAIL_ECHEC` | error | — | Rien n'a été envoyé ni noté. Ne pas réessayer seul ; prévenir Madeleine. |
 | `COMMANDE_NON_TRACEE` (email parti, Notion en échec) | warning | `reference`, `trace_locale` | **Ne jamais relancer** (l'email partirait deux fois). Dire que l'email est parti mais que la commande n'est pas notée ; elle est gardée en trace locale (D3). |
 | Refus de Madeleine | — | — | L'outil ne s'exécute pas ; le graphe renvoie un message de refus. Ne rien envoyer. |

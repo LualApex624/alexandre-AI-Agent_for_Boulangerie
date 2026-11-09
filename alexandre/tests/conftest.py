@@ -7,6 +7,7 @@ from boulangerie.notion_repo import NotionIds, NotionRepository
 from boulangerie.tools import CLE_VALIDATION, Deps, build_tools
 from tests.fakes import DB_CATALOGUE, DB_COMMANDES, DB_STOCK, DB_VENTES, FakeMailer, FakeNotionClient
 
+DATE_REFERENCE = date(2026, 2, 16)
 IDS = NotionIds(stock=DB_STOCK, ventes=DB_VENTES, catalogue=DB_CATALOGUE, commandes=DB_COMMANDES)
 
 
@@ -25,7 +26,6 @@ def deps(notion, mailer, tmp_path) -> Deps:
     return Deps(
         repo=NotionRepository(notion, IDS),
         mailer=mailer,
-        date_reference=date(2026, 2, 16),
         trace_dir=tmp_path / "var",
         clock=lambda: datetime(2026, 11, 9, 10, 30),
     )

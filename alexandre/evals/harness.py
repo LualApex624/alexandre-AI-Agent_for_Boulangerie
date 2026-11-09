@@ -48,7 +48,6 @@ async def jouer(scenario: Scenario, model, *, essai: int = 1, fallback=None, max
     deps = Deps(
         repo=NotionRepository(notion, NotionIds(DB_STOCK, DB_VENTES, DB_CATALOGUE, DB_COMMANDES)),
         mailer=mailer,
-        date_reference=DATE_REFERENCE,
         trace_dir=Path(tempfile.mkdtemp(prefix="eval-")),
         clock=lambda: datetime(2026, 11, 9, 10, 0),
     )
@@ -60,15 +59,15 @@ async def jouer(scenario: Scenario, model, *, essai: int = 1, fallback=None, max
 
     reponse = await conversation.envoyer(scenario.question)
     if scenario.commande:
-        if reponse.validation is None and scenario.relance:
+        if not reponse.validations and scenario.relance:
             messages_madeleine.append(scenario.relance)
             reponse = await conversation.envoyer(scenario.relance)
-        arret = reponse.validation is not None and not mailer.sent and not notion.created
+        arret = bool(reponse.validations) and not mailer.sent and not notion.created
         resultat.criteres["arret_avant_envoi"] = _critere(
             None if arret else "le graphe ne s'est pas arrêté avant l'envoi (ou a envoyé sans validation)"
         )
-        if reponse.validation is not None:
-            reponse = await conversation.valider(approuve=True)
+        if reponse.validations:
+            reponse = await conversation.valider(True)
         envoi = (
             len(mailer.sent) == 1 and mailer.sent[0]["destinataire"] == DESTINATAIRE_S4 and len(notion.created) == 1
         )

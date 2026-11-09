@@ -1,7 +1,7 @@
 """Une conversation avec Alexandre, indépendante de l'interface.
 
-Expose deux opérations : `envoyer` un message et `valider` (ou refuser) une
-commande en attente. Toute erreur inattendue devient un message clair pour
+Expose deux opérations : `envoyer` un message et `valider` (ou refuser) les
+commandes en attente, une décision par commande. Toute erreur inattendue devient un message clair pour
 Madeleine ; le détail technique reste dans les logs.
 """
 
@@ -16,7 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 
 from boulangerie.notion_repo import NotionIndisponible, NotionRepository
-from boulangerie.tools import CLE_VALIDATION, annuaire_fournisseurs, normaliser
+from boulangerie.tools import CLE_VALIDATION, trouver_fournisseur
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class DemandeValidation:
 @dataclass(frozen=True)
 class Reponse:
     texte: str | None
-    validation: DemandeValidation | None = None
+    validations: tuple[DemandeValidation, ...] = ()  # commandes en attente de Madeleine, dans l'ordre
 
 
 class Conversation:
@@ -63,30 +63,40 @@ class Conversation:
         self._agent = agent
         self._repo = repo
         self._config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
+        self._en_attente = 0
 
     async def envoyer(self, message: str, callbacks: list | None = None) -> Reponse:
         return await self._executer({"messages": [HumanMessage(content=message)]}, callbacks)
 
-    async def valider(self, approuve: bool, callbacks: list | None = None) -> Reponse:
-        decision = {"type": "approve"} if approuve else {"type": "reject", "message": MESSAGE_REFUS}
-        return await self._executer(Command(resume={"decisions": [decision]}), callbacks, validee=approuve)
+    async def valider(self, approbations: bool | list[bool], callbacks: list | None = None) -> Reponse:
+        """Une décision par commande en attente ; un booléen seul s'applique à toutes."""
+        if isinstance(approbations, bool):
+            approbations = [approbations] * self._en_attente
+        decisions = [
+            {"type": "approve"} if ok else {"type": "reject", "message": MESSAGE_REFUS} for ok in approbations
+        ]
+        return await self._executer(Command(resume={"decisions": decisions}), callbacks, validee=any(approbations))
 
     async def _executer(self, entree: Any, callbacks: list | None, validee: bool = False) -> Reponse:
         configurable = {**self._config["configurable"], CLE_VALIDATION: validee}
         config = {"configurable": configurable, "callbacks": callbacks or []}
         try:
             etat = await self._agent.ainvoke(entree, config=config)
-        except Exception:  # noqa: BLE001 — jamais de stacktrace côté Madeleine
-            log.exception("Échec d'un tour de conversation")
+        except Exception as exc:  # noqa: BLE001 — jamais de stacktrace côté Madeleine
+            # Type seulement : le message d'une erreur réseau ou LLM peut contenir des données sensibles.
+            log.error("Échec d'un tour de conversation : %s", type(exc).__name__)
+            log.debug("Détail de l'échec", exc_info=True)
             return Reponse(texte=MESSAGE_ERREUR)
 
         interruptions = etat.get("__interrupt__") or []
         if interruptions:
-            return Reponse(texte=None, validation=await self._apercu(interruptions[0].value))
+            demandes = interruptions[0].value["action_requests"]
+            self._en_attente = len(demandes)
+            return Reponse(texte=None, validations=tuple([await self._apercu(d["args"]) for d in demandes]))
+        self._en_attente = 0
         return Reponse(texte=self._dernier_texte(etat))
 
-    async def _apercu(self, demande: dict) -> DemandeValidation:
-        args = demande["action_requests"][0]["args"]
+    async def _apercu(self, args: dict) -> DemandeValidation:
         fournisseur = str(args.get("fournisseur", ""))
         return DemandeValidation(
             fournisseur=securiser_apercu(fournisseur),
@@ -101,10 +111,10 @@ class Conversation:
         if self._repo is None:
             return None
         try:
-            trouve = annuaire_fournisseurs(await self._repo.lister_stock()).get(normaliser(fournisseur))
+            trouve = trouver_fournisseur(await self._repo.lister_stock(), fournisseur)
         except NotionIndisponible:
             return None
-        return trouve[1] if trouve else None
+        return trouve.email if trouve else None
 
     @staticmethod
     def _dernier_texte(etat: dict) -> str:

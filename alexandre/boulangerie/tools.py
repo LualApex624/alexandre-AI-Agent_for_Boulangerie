@@ -16,9 +16,9 @@ from typing import Literal, Protocol
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, StructuredTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
-from boulangerie.envelope import arrondi, avertissement, erreur, notion_indisponible, succes
+from boulangerie.envelope import arrondi, avertissement, detail_erreur, erreur, notion_indisponible, succes
 from boulangerie.forecast import COEFFICIENT, OBSERVATIONS_MINIMALES, fenetre, prevoir
 from boulangerie.notion_repo import Ingredient, NotionIndisponible, NotionRepository, NouvelleCommande
 from boulangerie.prompt import jour_fr
@@ -34,7 +34,6 @@ class Mailer(Protocol):
 class Deps:
     repo: NotionRepository
     mailer: Mailer | None
-    date_reference: date
     trace_dir: Path
     clock: Callable[[], datetime] = field(default=datetime.now)
 
@@ -77,6 +76,17 @@ class ConsulterArgs(BaseModel):
     )
 
 
+def _aucune_correspondance(quoi: str, ce_quoi: str, recherche: str | None, data: dict) -> str:
+    return avertissement(
+        f"Aucun {quoi} ne correspond à « {recherche} ».",
+        data,
+        next_actions=[
+            "Réessaie une fois avec un mot-clé plus court.",
+            f"Sinon, dis à Madeleine que tu ne trouves pas {ce_quoi}.",
+        ],
+    )
+
+
 def _parametre_invalide(cause: str) -> str:
     return erreur(
         "PARAMETRE_INVALIDE",
@@ -89,6 +99,8 @@ def _parametre_invalide(cause: str) -> str:
 
 async def _consulter_stock(deps: Deps, recherche: str | None, sous_seuil_uniquement: bool) -> str:
     ingredients = [i for i in await deps.repo.lister_stock() if correspond(recherche, i.nom)]
+    if recherche and not ingredients:
+        return _aucune_correspondance("ingrédient", "cet ingrédient", recherche, {"items": [], "nb_resultats": 0})
     if sous_seuil_uniquement:
         ingredients = sorted(
             (i for i in ingredients if i.sous_seuil),
@@ -110,16 +122,7 @@ async def _consulter_stock(deps: Deps, recherche: str | None, sous_seuil_uniquem
     ]
     data = {"items": items, "nb_resultats": len(items)}
     if not items:
-        if sous_seuil_uniquement:
-            return succes("Aucun ingrédient n'est sous son seuil d'alerte.", data)
-        return avertissement(
-            f"Aucun ingrédient ne correspond à « {recherche} ».",
-            data,
-            next_actions=[
-                "Réessaie une fois avec un mot-clé plus court.",
-                "Sinon, dis à Madeleine que tu ne trouves pas cet ingrédient.",
-            ],
-        )
+        return succes("Aucun ingrédient n'est sous son seuil d'alerte.", data)
     alertes = sum(1 for i in items if i["sous_seuil"])
     return succes(f"{len(items)} ingrédient(s) trouvé(s), dont {alertes} sous le seuil d'alerte.", data)
 
@@ -132,14 +135,14 @@ async def _consulter_ventes(deps: Deps, recherche: str | None, debut: date, fin:
         else None
     )
     retenues = [v for v in toutes if debut <= v.jour <= fin and correspond(recherche, v.produit)]
-    cumuls: dict[str, list[float]] = {}
+    cumuls: dict[str, dict[str, float]] = {}
     for v in retenues:
-        cumul = cumuls.setdefault(v.produit, [0.0, 0.0])
-        cumul[0] += v.quantite
-        cumul[1] += v.ca
+        cumul = cumuls.setdefault(v.produit, {"quantite": 0.0, "ca": 0.0})
+        cumul["quantite"] += v.quantite
+        cumul["ca"] += v.ca
     par_produit = [
-        {"produit": produit, "quantite": arrondi(q), "ca": arrondi(ca)}
-        for produit, (q, ca) in sorted(cumuls.items(), key=lambda kv: -kv[1][0])
+        {"produit": produit, "quantite": arrondi(c["quantite"]), "ca": arrondi(c["ca"])}
+        for produit, c in sorted(cumuls.items(), key=lambda kv: -kv[1]["quantite"])
     ]
     data = {
         "periode": {"debut": debut.isoformat(), "fin": fin.isoformat()},
@@ -184,14 +187,7 @@ async def _consulter_catalogue(deps: Deps, recherche: str | None) -> str:
     ]
     data = {"items": items, "nb_resultats": len(items)}
     if not items:
-        return avertissement(
-            f"Aucun produit ne correspond à « {recherche} ».",
-            data,
-            next_actions=[
-                "Réessaie une fois avec un mot-clé plus court.",
-                "Sinon, dis à Madeleine que tu ne trouves pas ce produit.",
-            ],
-        )
+        return _aucune_correspondance("produit", "ce produit", recherche, data)
     return succes(f"{len(items)} produit(s) trouvé(s) dans le catalogue.", data)
 
 
@@ -221,12 +217,12 @@ async def _prevoir_production(deps: Deps, date_cible: date, produit: str | None,
         "coefficient": COEFFICIENT,
         "produits": [
             {
-                "produit": l.produit,
-                "observations": l.observations,
-                "moyenne": arrondi(l.moyenne),
-                "recommandation": l.recommandation,
+                "produit": ligne.produit,
+                "observations": ligne.observations,
+                "moyenne": arrondi(ligne.moyenne),
+                "recommandation": ligne.recommandation,
             }
-            for l in lignes
+            for ligne in lignes
         ],
     }
     if not lignes:
@@ -235,7 +231,7 @@ async def _prevoir_production(deps: Deps, date_cible: date, produit: str | None,
             data,
             next_actions=["Dis à Madeleine qu'il n'y a pas d'historique pour ce jour ; ne propose aucune quantité."],
         )
-    if any(l.observations < OBSERVATIONS_MINIMALES for l in lignes):
+    if any(ligne.observations < OBSERVATIONS_MINIMALES for ligne in lignes):
         return avertissement(
             f"Prévision pour le {jour} {date_cible} calculée sur peu de {jour}s "
             f"(moins de {OBSERVATIONS_MINIMALES} observations) : estimation fragile.",
@@ -268,15 +264,25 @@ class CommanderArgs(BaseModel):
     )
 
 
-def annuaire_fournisseurs(stock: list[Ingredient]) -> dict[str, tuple[str, str | None]]:
-    """Nom normalisé → (nom canonique, email) d'après les fiches du stock."""
-    annuaire: dict[str, tuple[str, str | None]] = {}
+@dataclass(frozen=True)
+class Fournisseur:
+    nom: str  # nom canonique, tel qu'écrit dans le stock
+    email: str | None
+
+
+def fournisseurs(stock: list[Ingredient]) -> dict[str, Fournisseur]:
+    """Annuaire des fournisseurs (clé : nom normalisé) d'après les fiches du stock."""
+    annuaire: dict[str, Fournisseur] = {}
     for ingredient in stock:
         if ingredient.fournisseur:
             cle = normaliser(ingredient.fournisseur)
-            nom, email = annuaire.get(cle, (ingredient.fournisseur, None))
-            annuaire[cle] = (nom, email or ingredient.email)
+            connu = annuaire.get(cle, Fournisseur(ingredient.fournisseur, None))
+            annuaire[cle] = Fournisseur(connu.nom, connu.email or ingredient.email)
     return annuaire
+
+
+def trouver_fournisseur(stock: list[Ingredient], nom: str) -> Fournisseur | None:
+    return fournisseurs(stock).get(normaliser(nom))
 
 
 def _valider_commande(
@@ -308,7 +314,6 @@ def _tracer_localement(deps: Deps, commande: NouvelleCommande, cause: str) -> Pa
         "horodatage": deps.clock().isoformat(timespec="seconds"),
         "cause": cause,
         **{k: (v.isoformat() if isinstance(v, date) else v) for k, v in asdict(commande).items()},
-        "corps": commande.notes,
     }
     descripteur = os.open(chemin, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     os.chmod(chemin, 0o600)
@@ -350,8 +355,7 @@ async def _passer_commande(
         stock = await deps.repo.lister_stock()
     except NotionIndisponible:
         return notion_indisponible()
-    annuaire = annuaire_fournisseurs(stock)
-    trouve = annuaire.get(normaliser(fournisseur))
+    trouve = trouver_fournisseur(stock, fournisseur)
     if trouve is None:
         return erreur(
             "FOURNISSEUR_INCONNU",
@@ -359,9 +363,9 @@ async def _passer_commande(
             cause="Ce nom ne correspond à aucun fournisseur du stock.",
             retry="Reprends la commande avec un des noms de data.fournisseurs_connus.",
             stop="Si aucun ne convient, demande à Madeleine de préciser le fournisseur.",
-            data={"fournisseurs_connus": sorted({nom for nom, _ in annuaire.values()}, key=normaliser)},
+            data={"fournisseurs_connus": sorted({f.nom for f in fournisseurs(stock).values()}, key=normaliser)},
         )
-    nom_fournisseur, email = trouve
+    nom_fournisseur, email = trouve.nom, trouve.email
     if not email or not EMAIL_SIMPLE.fullmatch(email):
         return erreur(
             "FOURNISSEUR_SANS_EMAIL",
@@ -390,34 +394,36 @@ async def _passer_commande(
         email=email,
         produits=produits,
         montant_estime=montant_estime,
-        notes=corps,
+        corps=corps,
     )
     try:
         page_id = await deps.repo.creer_commande(commande)
     except NotionIndisponible:
         chemin = _tracer_localement(deps, commande, "écriture Notion impossible après envoi de l'email")
-        return json.dumps(
-            {
-                "status": "warning",
-                "summary": f"L'email est parti chez {nom_fournisseur}, mais la commande {commande.reference} "
-                "n'a pas pu être notée dans les commandes. Elle est gardée de côté.",
-                "data": {"destinataire": email, "fournisseur": nom_fournisseur, "objet": objet},
-                "next_actions": ["Explique à Madeleine que l'email est bien parti et que la commande est gardée de côté."],
-                "artifacts": {"reference": commande.reference, "trace_locale": str(chemin)},
-                "error": {
-                    "code": "COMMANDE_NON_TRACEE",
-                    "cause": "L'enregistrement de la commande a échoué après l'envoi de l'email.",
-                    "retry": "Ne jamais relancer passer_commande : l'email partirait une deuxième fois.",
-                    "stop": "Arrête-toi là et informe Madeleine.",
-                },
-            },
-            ensure_ascii=False,
+        return avertissement(
+            f"L'email est parti chez {nom_fournisseur}, mais la commande {commande.reference} "
+            "n'a pas pu être notée dans les commandes. Elle est gardée de côté.",
+            {"destinataire": email, "fournisseur": nom_fournisseur, "objet": objet},
+            next_actions=["Explique à Madeleine que l'email est bien parti et que la commande est gardée de côté."],
+            artifacts={"reference": commande.reference, "trace_locale": str(chemin)},
+            error=detail_erreur(
+                "COMMANDE_NON_TRACEE",
+                cause="L'enregistrement de la commande a échoué après l'envoi de l'email.",
+                retry="Ne jamais relancer passer_commande : l'email partirait une deuxième fois.",
+                stop="Arrête-toi là et informe Madeleine.",
+            ),
         )
     return succes(
         f"Email envoyé à {nom_fournisseur} et commande {commande.reference} enregistrée.",
         {"destinataire": email, "fournisseur": nom_fournisseur, "objet": objet},
         artifacts={"reference": commande.reference, "notion_page_id": page_id},
     )
+
+
+def _argument_invalide(exc: ValidationError) -> str:
+    """Argument hors schéma (type, borne, valeur non prévue) : enveloppe, jamais d'exception."""
+    champs = ", ".join(sorted({".".join(str(p) for p in e["loc"]) for e in exc.errors()}))
+    return _parametre_invalide(f"Argument invalide : {champs}. Vérifie les valeurs autorisées dans la description.")
 
 
 def build_tools(deps: Deps) -> list[BaseTool]:
@@ -435,19 +441,18 @@ def build_tools(deps: Deps) -> list[BaseTool]:
                 return await _consulter_stock(deps, recherche, sous_seuil_uniquement)
             if table == "catalogue":
                 return await _consulter_catalogue(deps, recherche)
-            if table == "ventes":
-                if date_debut is None or date_fin is None:
-                    return erreur(
-                        "PERIODE_MANQUANTE",
-                        "Il faut une période (date de début et de fin) pour lire les ventes.",
-                        cause="date_debut ou date_fin est absente.",
-                        retry="Ne réessaie pas avec des dates inventées.",
-                        stop="Demande à Madeleine de quelle période elle parle.",
-                    )
-                if date_debut > date_fin:
-                    return _parametre_invalide("date_debut est après date_fin.")
-                return await _consulter_ventes(deps, recherche, date_debut, date_fin)
-            return _parametre_invalide(f"Table non prise en charge : {table}.")
+            # table == "ventes" (le schéma n'admet que ces trois valeurs)
+            if date_debut is None or date_fin is None:
+                return erreur(
+                    "PERIODE_MANQUANTE",
+                    "Il faut une période (date de début et de fin) pour lire les ventes.",
+                    cause="date_debut ou date_fin est absente.",
+                    retry="Ne réessaie pas avec des dates inventées.",
+                    stop="Demande à Madeleine de quelle période elle parle.",
+                )
+            if date_debut > date_fin:
+                return _parametre_invalide("date_debut est après date_fin.")
+            return await _consulter_ventes(deps, recherche, date_debut, date_fin)
         except NotionIndisponible:
             return notion_indisponible()
 
@@ -479,6 +484,7 @@ def build_tools(deps: Deps) -> list[BaseTool]:
                 "des produits (prix, coût de revient, marge). Seule source autorisée pour ces chiffres."
             ),
             args_schema=ConsulterArgs,
+            handle_validation_error=_argument_invalide,
         ),
         StructuredTool.from_function(
             coroutine=prevoir_production,
@@ -488,6 +494,7 @@ def build_tools(deps: Deps) -> list[BaseTool]:
                 "même jour de la semaine sur l'historique, plus 10 % de marge de sécurité."
             ),
             args_schema=PrevoirArgs,
+            handle_validation_error=_argument_invalide,
         ),
         StructuredTool.from_function(
             coroutine=passer_commande,
@@ -497,5 +504,6 @@ def build_tools(deps: Deps) -> list[BaseTool]:
                 "commande. Action irréversible : Madeleine valide le brouillon avant l'exécution."
             ),
             args_schema=CommanderArgs,
+            handle_validation_error=_argument_invalide,
         ),
     ]

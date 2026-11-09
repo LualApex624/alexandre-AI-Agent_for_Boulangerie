@@ -38,7 +38,7 @@ Lancer depuis `alexandre/` et garder le port **8000** : les origines autorisées
 
 ```bash
 cd alexandre
-.venv/bin/pytest                          # 79 tests + évals hors ligne, sans clé ni réseau
+.venv/bin/pytest                          # 85 tests et évals hors ligne, sans clé ni réseau
 .venv/bin/python -m evals.run_evals --k 3 # évals live : vrai Gemini, 6 scénarios, pass@k
 ```
 
@@ -69,7 +69,7 @@ Madeleine ─► Chainlit (app.py) ─► Conversation ─► Agent LangGraph (c
 | Module | Rôle |
 |---|---|
 | `app.py` | Interface Chainlit : appels d'outils visibles, brouillon de commande et boutons de validation |
-| `boulangerie/conversation.py` | Un fil de conversation : `envoyer`, `valider` ; messages clairs en cas de panne |
+| `boulangerie/conversation.py` | Un fil de conversation : `envoyer`, `valider` (une décision par commande) ; messages clairs en cas de panne |
 | `boulangerie/agent.py` | `create_agent` + middlewares : validation humaine, retry, secours Mistral, limite d'appels |
 | `boulangerie/tools.py` | Les 3 outils et leur enveloppe de résultat commune ([contrat](alexandre/docs/tools.md)) |
 | `boulangerie/notion_repo.py` | Accès Notion asynchrone : cache du `data_source_id`, pagination, parsing tolérant |
@@ -127,11 +127,14 @@ Détails et preuves : [`alexandre/docs/securite.md`](alexandre/docs/securite.md)
 - Historique perdu au redémarrage (checkpointer en mémoire), pas d'authentification ni de multi-utilisateur : prototype local pour une seule personne.
 - Dépendance au niveau gratuit de Gemini : quota journalier et limites de débit possibles en démonstration intensive (erreur `429`). Renseigner `MISTRAL_API_KEY` active un modèle de secours.
 - Calendrier figé par `DATE_REFERENCE` pour coller aux données de démo.
+- Pas de streaming du texte : les appels d'outils s'affichent au fil de l'eau, la réponse s'affiche d'un bloc à la fin du tour (`ainvoke`, comme le flux du §5.3 du cahier).
+- Trois outils au lieu de « 4 à 6 fonctions » (§5.2) : la lecture Notion est un outil unique paramétré, ce que le §7.1 autorise, et l'envoi d'email et l'écriture Notion forment un seul outil pour qu'une seule validation couvre les deux (décision D2).
 
 ## Pistes d'amélioration
 
 - Ajuster la prévision selon la météo ([Open-Meteo](https://open-meteo.com), gratuit, sans clé) : moins de passage les jours de pluie.
 - Persister les conversations (checkpointer SQLite ou Postgres).
+- Streamer la réponse finale token par token (`astream` + `cl.Message.stream_token`).
 - Relance automatique des commandes gardées en trace locale.
 - Authentification Chainlit si l'interface doit être exposée au-delà du poste local.
 - Évaluations live dans la CI avec une clé dédiée, et suivi du pass@k dans le temps.

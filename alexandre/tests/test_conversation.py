@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from boulangerie.agent import build_agent
 from boulangerie.conversation import MESSAGE_ERREUR, Conversation
 from boulangerie.tools import build_tools
+from tests.conftest import DATE_REFERENCE
 from tests.fakes import ScriptedChatModel, appel_outil
 
 COMMANDE = {
@@ -18,7 +19,7 @@ COMMANDE = {
 
 def nouvelle_conversation(deps, *reponses) -> tuple[Conversation, ScriptedChatModel]:
     modele = ScriptedChatModel(reponses=list(reponses))
-    agent = build_agent(modele, build_tools(deps), deps.date_reference, max_retries=0)
+    agent = build_agent(modele, build_tools(deps), DATE_REFERENCE, max_retries=0)
     return Conversation(agent, thread_id="madeleine", repo=deps.repo), modele
 
 
@@ -32,7 +33,7 @@ async def test_une_question_appelle_l_outil_et_renvoie_la_reponse_du_modele(deps
     reponse = await conversation.envoyer("Il me reste combien de beurre ?")
 
     assert reponse.texte == "Il te reste **8 kg** de beurre."
-    assert reponse.validation is None
+    assert not reponse.validations
     premier_appel, second_appel = modele.appels
     assert isinstance(premier_appel[0], SystemMessage) and "lundi 16/02/2026" in premier_appel[0].content
     resultat_outil = next(m for m in second_appel if isinstance(m, ToolMessage))
@@ -63,11 +64,11 @@ async def test_le_graphe_s_arrete_avant_passer_commande_et_n_envoie_rien(deps, m
 
     reponse = await conversation.envoyer("Commande 50 kg de farine T65 chez Minoterie Dupont")
 
-    assert reponse.validation is not None
-    assert reponse.validation.fournisseur == "Minoterie Dupont"
-    assert reponse.validation.destinataire == "commandes@minoterie-dupont.fr"
-    assert reponse.validation.objet == COMMANDE["objet"]
-    assert reponse.validation.corps == COMMANDE["corps"]
+    assert reponse.validations
+    assert reponse.validations[0].fournisseur == "Minoterie Dupont"
+    assert reponse.validations[0].destinataire == "commandes@minoterie-dupont.fr"
+    assert reponse.validations[0].objet == COMMANDE["objet"]
+    assert reponse.validations[0].corps == COMMANDE["corps"]
     assert mailer.sent == [] and notion.created == []
 
 
@@ -79,7 +80,7 @@ async def test_apres_validation_l_email_part_et_la_commande_est_enregistree_une_
     )
     await conversation.envoyer("Commande 50 kg de farine T65 chez Minoterie Dupont")
 
-    reponse = await conversation.valider(approuve=True)
+    reponse = await conversation.valider(True)
 
     assert reponse.texte == "C'est parti, la commande est notée."
     assert len(mailer.sent) == 1
@@ -94,7 +95,7 @@ async def test_un_refus_de_madeleine_n_envoie_rien_et_le_modele_en_est_informe(d
     )
     await conversation.envoyer("Commande 50 kg de farine T65 chez Minoterie Dupont")
 
-    reponse = await conversation.valider(approuve=False)
+    reponse = await conversation.valider(False)
 
     assert reponse.texte == "D'accord, rien n'est parti."
     assert mailer.sent == [] and notion.created == []

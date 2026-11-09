@@ -9,7 +9,6 @@ l'état de la conversation (y compris les ToolMessages) par thread.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
@@ -39,7 +38,6 @@ def build_agent(
     date_reference: date,
     *,
     fallback: BaseChatModel | None = None,
-    checkpointer: Any | None = None,
     max_retries: int = 2,
     limite_appels_modele: int = 12,
 ):
@@ -55,7 +53,7 @@ def build_agent(
         tools,
         system_prompt=render_system_prompt(date_reference),
         middleware=middleware,
-        checkpointer=checkpointer if checkpointer is not None else InMemorySaver(),
+        checkpointer=InMemorySaver(),
         name="alexandre",
     )
 
