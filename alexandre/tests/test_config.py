@@ -9,10 +9,10 @@ from boulangerie.prompt import render_system_prompt
 
 ENV_COMPLET = {
     "NOTION_TOKEN": "secret-notion",
-    "STOCK_DB_ID": "db-stock",
-    "VENTES_DB_ID": "db-ventes",
-    "CATALOGUE_DB_ID": "db-catalogue",
-    "COMMANDES_DB_ID": "db-commandes",
+    "STOCK_DB_ID": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "VENTES_DB_ID": "b1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "CATALOGUE_DB_ID": "c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "COMMANDES_DB_ID": "d1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
     "GOOGLE_API_KEY": "secret-google",
     "SMTP_HOST": "sandbox.smtp.mailtrap.io",
     "SMTP_PORT": "587",
@@ -25,7 +25,7 @@ ENV_COMPLET = {
 def test_charge_une_configuration_complete_avec_les_valeurs_par_defaut():
     settings = Settings.from_env(ENV_COMPLET)
 
-    assert settings.stock_db_id == "db-stock"
+    assert settings.stock_db_id == "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
     assert settings.smtp is not None and settings.smtp.port == 587
     assert settings.llm_model == "gemini-3.5-flash"
     assert settings.date_reference == date(2026, 2, 16)

@@ -4,7 +4,7 @@ from datetime import date, datetime
 import pytest
 
 from boulangerie.notion_repo import NotionIds, NotionRepository
-from boulangerie.tools import Deps, build_tools
+from boulangerie.tools import CLE_VALIDATION, Deps, build_tools
 from tests.fakes import DB_CATALOGUE, DB_COMMANDES, DB_STOCK, DB_VENTES, FakeMailer, FakeNotionClient
 
 IDS = NotionIds(stock=DB_STOCK, ventes=DB_VENTES, catalogue=DB_CATALOGUE, commandes=DB_COMMANDES)
@@ -33,10 +33,10 @@ def deps(notion, mailer, tmp_path) -> Deps:
 
 @pytest.fixture
 def appeler(deps):
-    """Appelle un outil comme le fait l'agent et décode l'enveloppe JSON."""
+    """Appelle un outil comme le fait l'agent après validation de Madeleine, et décode l'enveloppe JSON."""
     tools = {t.name: t for t in build_tools(deps)}
 
     async def _appeler(nom: str, **arguments) -> dict:
-        return json.loads(await tools[nom].ainvoke(arguments))
+        return json.loads(await tools[nom].ainvoke(arguments, config={"configurable": {CLE_VALIDATION: True}}))
 
     return _appeler

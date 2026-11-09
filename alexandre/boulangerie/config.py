@@ -8,6 +8,7 @@ ne jamais finir dans un log ou un message d'erreur.
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
@@ -22,6 +23,9 @@ REQUIRED = (
     "GOOGLE_API_KEY",
 )
 SMTP_VARS = ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM")
+
+NOTION_ID = re.compile(r"^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$")
+NOTION_DB_VARS = ("STOCK_DB_ID", "VENTES_DB_ID", "CATALOGUE_DB_ID", "COMMANDES_DB_ID")
 
 DEFAULT_MODEL = "gemini-3.5-flash"
 DEFAULT_FALLBACK_MODEL = "mistral-small-latest"
@@ -65,6 +69,10 @@ class Settings:
         missing = [name for name in REQUIRED if not get(name)]
         if missing:
             errors.append("variables manquantes : " + ", ".join(missing))
+
+        mal_formes = [name for name in NOTION_DB_VARS if get(name) and not NOTION_ID.fullmatch(get(name))]
+        if mal_formes:
+            errors.append("identifiants Notion mal formés (32 caractères hexadécimaux attendus) : " + ", ".join(mal_formes))
 
         raw_date = get("DATE_REFERENCE") or DEFAULT_DATE_REFERENCE
         try:

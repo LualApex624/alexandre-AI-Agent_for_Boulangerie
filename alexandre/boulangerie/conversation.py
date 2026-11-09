@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 
 from boulangerie.notion_repo import NotionIndisponible, NotionRepository
-from boulangerie.tools import annuaire_fournisseurs, normaliser
+from boulangerie.tools import CLE_VALIDATION, annuaire_fournisseurs, normaliser
 
 log = logging.getLogger(__name__)
 
@@ -53,10 +53,11 @@ class Conversation:
 
     async def valider(self, approuve: bool, callbacks: list | None = None) -> Reponse:
         decision = {"type": "approve"} if approuve else {"type": "reject", "message": MESSAGE_REFUS}
-        return await self._executer(Command(resume={"decisions": [decision]}), callbacks)
+        return await self._executer(Command(resume={"decisions": [decision]}), callbacks, validee=approuve)
 
-    async def _executer(self, entree: Any, callbacks: list | None) -> Reponse:
-        config = {**self._config, "callbacks": callbacks or []}
+    async def _executer(self, entree: Any, callbacks: list | None, validee: bool = False) -> Reponse:
+        configurable = {**self._config["configurable"], CLE_VALIDATION: validee}
+        config = {"configurable": configurable, "callbacks": callbacks or []}
         try:
             etat = await self._agent.ainvoke(entree, config=config)
         except Exception:  # noqa: BLE001 — jamais de stacktrace côté Madeleine

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -21,6 +22,21 @@ from notion_client.errors import NotionClientErrorBase
 log = logging.getLogger(__name__)
 
 PAGE_SIZE = 100
+TEXTE_MAX = 500
+MARQUEUR_TRONQUE = "…[tronqué]"
+
+
+def nettoyer(valeur: str | None) -> str | None:
+    """Contenu Notion = donnée non fiable : retire les caractères de contrôle et de
+    formatage invisibles (séquences terminal, inversion de sens…) et borne la longueur."""
+    if valeur is None:
+        return None
+    propre = "".join(
+        c for c in valeur if c in "\n\t" or unicodedata.category(c) not in {"Cc", "Cf"}
+    ).strip()
+    if len(propre) > TEXTE_MAX:
+        propre = propre[:TEXTE_MAX] + MARQUEUR_TRONQUE
+    return propre or None
 
 
 class NotionIndisponible(Exception):
@@ -89,8 +105,7 @@ def _texte(prop: dict | None) -> str | None:
         return None
     morceaux = prop.get(prop.get("type", ""), None)
     if isinstance(morceaux, list):
-        texte = "".join(m.get("plain_text", "") for m in morceaux).strip()
-        return texte or None
+        return nettoyer("".join(m.get("plain_text", "") for m in morceaux))
     return None
 
 
@@ -103,7 +118,7 @@ def _nombre(prop: dict | None) -> float | None:
 
 
 def _select(prop: dict | None) -> str | None:
-    return ((prop or {}).get("select") or {}).get("name")
+    return nettoyer(((prop or {}).get("select") or {}).get("name"))
 
 
 def _date(prop: dict | None) -> str | None:
@@ -111,7 +126,7 @@ def _date(prop: dict | None) -> str | None:
 
 
 def _email(prop: dict | None) -> str | None:
-    return (prop or {}).get("email")
+    return nettoyer((prop or {}).get("email"))
 
 
 class NotionRepository:

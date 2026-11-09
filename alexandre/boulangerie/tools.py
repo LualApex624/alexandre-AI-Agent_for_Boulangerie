@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 import secrets
 import unicodedata
 from collections.abc import Callable
@@ -12,6 +14,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Literal, Protocol
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
@@ -246,6 +249,11 @@ async def _prevoir_production(deps: Deps, date_cible: date, produit: str | None,
 
 OBJET_MAX = 150
 CORPS_MAX = 3000
+FOURNISSEUR_MAX = 100
+PRODUITS_MAX = 500
+# Jeton posé par Conversation.valider uniquement quand Madeleine a cliqué « Envoyer ».
+CLE_VALIDATION = "validation_madeleine"
+EMAIL_SIMPLE = re.compile(r"^[^@\s,;<>\"']+@[^@\s,;<>\"']+\.[A-Za-z]{2,}$")
 FICHIER_TRACE = "commandes_non_tracees.jsonl"
 
 
@@ -271,7 +279,13 @@ def annuaire_fournisseurs(stock: list[Ingredient]) -> dict[str, tuple[str, str |
     return annuaire
 
 
-def _valider_commande(objet: str, corps: str, produits: str, montant: float | None) -> str | None:
+def _valider_commande(
+    fournisseur: str, objet: str, corps: str, produits: str, montant: float | None
+) -> str | None:
+    if not fournisseur.strip() or len(fournisseur) > FOURNISSEUR_MAX:
+        return f"Le fournisseur doit faire entre 1 et {FOURNISSEUR_MAX} caractères."
+    if len(produits) > PRODUITS_MAX:
+        return f"La liste des produits ne doit pas dépasser {PRODUITS_MAX} caractères."
     if not objet.strip() or len(objet) > OBJET_MAX:
         return f"L'objet doit faire entre 1 et {OBJET_MAX} caractères."
     if "\r" in objet or "\n" in objet:
@@ -286,7 +300,9 @@ def _valider_commande(objet: str, corps: str, produits: str, montant: float | No
 
 
 def _tracer_localement(deps: Deps, commande: NouvelleCommande, cause: str) -> Path:
-    deps.trace_dir.mkdir(parents=True, exist_ok=True)
+    # Contient des données de commande : dossier et fichier réservés au propriétaire.
+    deps.trace_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(deps.trace_dir, 0o700)
     chemin = deps.trace_dir / FICHIER_TRACE
     enregistrement = {
         "horodatage": deps.clock().isoformat(timespec="seconds"),
@@ -294,15 +310,31 @@ def _tracer_localement(deps: Deps, commande: NouvelleCommande, cause: str) -> Pa
         **{k: (v.isoformat() if isinstance(v, date) else v) for k, v in asdict(commande).items()},
         "corps": commande.notes,
     }
-    with chemin.open("a", encoding="utf-8") as fichier:
+    descripteur = os.open(chemin, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    os.chmod(chemin, 0o600)
+    with os.fdopen(descripteur, "a", encoding="utf-8") as fichier:
         fichier.write(json.dumps(enregistrement, ensure_ascii=False) + "\n")
     return chemin
 
 
 async def _passer_commande(
-    deps: Deps, fournisseur: str, produits: str, objet: str, corps: str, montant_estime: float | None
+    deps: Deps,
+    fournisseur: str,
+    produits: str,
+    objet: str,
+    corps: str,
+    montant_estime: float | None,
+    validee: bool,
 ) -> str:
-    probleme = _valider_commande(objet, corps, produits, montant_estime)
+    if not validee:
+        return erreur(
+            "VALIDATION_REQUISE",
+            "Madeleine n'a pas validé cet envoi : rien n'a été envoyé ni noté.",
+            cause="L'outil a été appelé sans la validation explicite de Madeleine.",
+            retry="Ne réessaie pas de toi-même.",
+            stop="Demande à Madeleine si elle veut envoyer cette commande.",
+        )
+    probleme = _valider_commande(fournisseur, objet, corps, produits, montant_estime)
     if probleme:
         return _parametre_invalide(probleme)
     if deps.mailer is None:
@@ -330,11 +362,11 @@ async def _passer_commande(
             data={"fournisseurs_connus": sorted({nom for nom, _ in annuaire.values()}, key=normaliser)},
         )
     nom_fournisseur, email = trouve
-    if not email:
+    if not email or not EMAIL_SIMPLE.fullmatch(email):
         return erreur(
             "FOURNISSEUR_SANS_EMAIL",
-            f"Aucune adresse email n'est enregistrée pour {nom_fournisseur} : rien n'a été envoyé.",
-            cause="L'email du fournisseur est vide dans le stock.",
+            f"Pas d'adresse email valide enregistrée pour {nom_fournisseur} : rien n'a été envoyé.",
+            cause="L'email du fournisseur est vide ou invalide dans le stock.",
             retry="Ne réessaie pas.",
             stop="Dis à Madeleine qu'il faut ajouter l'email de ce fournisseur dans ses fiches.",
         )
@@ -426,9 +458,16 @@ def build_tools(deps: Deps) -> list[BaseTool]:
             return notion_indisponible()
 
     async def passer_commande(
-        fournisseur: str, produits: str, objet: str, corps: str, montant_estime: float | None = None
+        fournisseur: str,
+        produits: str,
+        objet: str,
+        corps: str,
+        montant_estime: float | None = None,
+        *,
+        config: RunnableConfig,
     ) -> str:
-        return await _passer_commande(deps, fournisseur, produits, objet, corps, montant_estime)
+        validee = (config.get("configurable") or {}).get(CLE_VALIDATION) is True
+        return await _passer_commande(deps, fournisseur, produits, objet, corps, montant_estime, validee)
 
     return [
         StructuredTool.from_function(
