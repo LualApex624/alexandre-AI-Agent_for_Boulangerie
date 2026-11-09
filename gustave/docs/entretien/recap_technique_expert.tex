@@ -1,0 +1,146 @@
+\documentclass[10.5pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+
+\definecolor{primary}{HTML}{1F3A5F}
+\definecolor{muted}{HTML}{555555}
+\hypersetup{colorlinks=true,linkcolor=primary,urlcolor=primary}
+
+\titleformat{\section}{\normalfont\large\bfseries\color{primary}}{\thesection}{0.5em}{}[\vspace{-0.4em}{\color{primary}\titlerule}]
+\titlespacing*{\section}{0pt}{1.1em}{0.6em}
+\setlist{itemsep=2pt,topsep=3pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small\color{muted} Gustave --- récapitulatif technique}
+\fancyhead[R]{\small\color{muted} Commit de référence : 932d8f4}
+\fancyfoot[C]{\small\thepage}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\begin{document}
+
+{\LARGE\bfseries\color{primary} Gustave --- Récapitulatif technique}\\[2pt]
+{\color{muted} Assistant IA agentique pour boulangerie artisanale. Document destiné à un ingénieur full stack confirmé.}
+
+\medskip
+\textbf{Méthode.} Tout ce qui suit provient de la lecture du code du dépôt (branche \code{main}, 5 commits du 23 au 24 juin 2026) et des versions réellement installées dans le \code{.venv}. Les points marqués \textit{observé} ont été vérifiés en exécutant l'application ; les autres sont issus de la lecture du code.
+
+\section{Résumé}
+Application Python monolithique d'environ 300 lignes : une interface de chat Chainlit, un agent LangChain 1.x (tool calling) adossé à \code{mistral-small-latest}, six outils qui lisent et écrivent dans quatre bases Notion, envoient des emails SMTP et calculent une prévision de production avec Pandas. Pas de base de données propre, pas de persistance de session, pas de tests, pas de conteneurisation.
+
+\section{Stack exacte}
+Versions relevées dans le \code{.venv} (Python 3.13.5). Le \code{requirements.txt} ne fixe \emph{aucune} version.
+
+\begin{center}\small
+\begin{tabular}{@{}L{3.3cm} L{2.6cm} L{9.6cm}@{}}
+\toprule
+\textbf{Couche} & \textbf{Version} & \textbf{Rôle dans le projet} \\
+\midrule
+Python & 3.13.5 & Runtime (le README annonce 3.12) \\
+chainlit & 2.11.1 & UI de chat, serveur applicatif, sessions, hooks \code{@cl.*} \\
+langchain & 1.3.14 & \code{create\_agent}, décorateur \code{@tool} \\
+langgraph & 1.2.9 & Dépendance transitive : exécution de l'agent sous forme de graphe \\
+langchain-core & 1.5.1 & Types de messages, interface des outils \\
+langchain-mistralai & 1.1.6 & \code{ChatMistralAI}, appels à \code{api.mistral.ai} \\
+notion-client & 3.1.0 & SDK Notion (API \code{data\_sources}) \\
+pandas / numpy & 3.0.5 / 2.5.1 & Agrégation pour la prévision \\
+python-dotenv & 1.2.2 & Variables d'environnement \\
+smtplib, email.mime & stdlib & Envoi SMTP avec STARTTLS \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Services externes : API Mistral (chat completions), API Notion (REST), serveur SMTP (Mailtrap prévu dans \code{CONTEXT.md}).\\
+Outillage : venv, pip, Git, pyrefly (configuré avec un chemin d'interpréteur Windows, \code{.venv/Scripts/python.exe}, inutilisable tel quel sur macOS/Linux).
+
+\section{Architecture et flux d'exécution}
+\begin{enumerate}[leftmargin=1.2cm]
+  \item \code{@cl.on\_chat\_start} : initialise \code{history = []} dans \code{cl.user\_session}.
+  \item \code{@cl.on\_message} : ajoute \code{\{role: user, content\}} à l'historique, appelle \code{run\_agent(history)}, ajoute la réponse finale (texte seul) et l'envoie via \code{cl.Message}.
+  \item \code{run\_agent} : \code{agent.invoke(\{"messages": history\})} puis retourne \code{response["messages"][-1].content}. Toute exception est capturée et renvoyée comme texte.
+  \item L'agent (\code{create\_agent(model, tools, system\_prompt)}) boucle : le LLM choisit un outil d'après sa docstring, l'outil s'exécute, le résultat revient au LLM, jusqu'à une réponse sans appel d'outil.
+  \item Chaque outil encapsule ses appels externes dans un \code{try/except} et renvoie une chaîne d'erreur plutôt que de lever.
+\end{enumerate}
+
+\textbf{Organisation du code.} \code{main.py} (UI, 43 lignes), \code{agent.py} (assemblage, 38 lignes), \code{tools/notion.py} (4 outils), \code{tools/email.py} (1 outil), \code{tools/prevision.py} (1 outil), \code{prompts/system\_prompt.txt}.
+
+\newpage
+\section{Les six outils}
+\begin{center}\small
+\begin{tabular}{@{}L{3.6cm} L{2.3cm} L{9.6cm}@{}}
+\toprule
+\textbf{Outil} & \textbf{Accès} & \textbf{Comportement} \\
+\midrule
+\code{lire\_stock} & Notion, lecture & Filtre \code{title contains} sur \code{Ingrédient}. Renvoie quantité, unité, fournisseur, email, seuil, dernière livraison. \\
+\code{lire\_ventes} & Notion, lecture & Filtre \code{and} sur produit (select \code{equals}) et plage de dates ; refuse sans \code{start\_date} et \code{end\_date} ; additionne quantités et CA. \\
+\code{lire\_catalogue} & Notion, lecture & Filtre \code{title contains} sur \code{Produit} ; prix, coût, marge (formule Notion), ingrédients, temps, disponibilité. \\
+\code{enregistrer\_commande} & Notion, écriture & \code{pages.create} dans la base Commandes ; référence \code{CMD-AAAAMMJJ-XXXX} (4 premières lettres du fournisseur). \\
+\code{envoyer\_email} & SMTP & \code{MIMEMultipart}, \code{starttls()}, \code{login()}, \code{send\_message()}. \\
+\code{prevision\_production} & Notion + Pandas & Récupère les ventes, déduit le jour de semaine depuis la date, \code{groupby(Produit).mean() * 1.1}, arrondi à l'unité. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Chaque appel d'outil est tracé par un \code{print("[TOOL CALL] ...")} (ajouté au commit \code{5cd260b}). Résolution Notion : chaque lecture appelle d'abord \code{databases.retrieve} pour obtenir le \code{data\_source\_id}, puis \code{data\_sources.query} (deux requêtes par outil, sans cache).
+
+\section{Modèle de données (Notion)}
+Quatre bases, schéma décrit dans \code{CONTEXT.md} :
+\begin{itemize}
+  \item \textbf{Stock} : Ingrédient (title), Quantité en stock, Seuil alerte, Prix unitaire (number), Unité, Fournisseur (select), Email fournisseur (email), Dernière livraison (date).
+  \item \textbf{Ventes} : Vente (title), Produit (select, 12 valeurs), Quantité vendue, CA (\texteuro), Date, Jour (select).
+  \item \textbf{Catalogue} : Produit (title), Catégorie (select), Prix TTC, Coût de revient, Marge (\%) (formula), Ingrédients principaux, Temps de préparation, Disponible (checkbox).
+  \item \textbf{Commandes} : écrite par l'agent (référence, date, fournisseur, email, produits, montant, notes, statut \og Envoyée \fg).
+\end{itemize}
+Données de démonstration : 2 au 15 février 2026 ; date de référence métier fixée au 16 février 2026 dans le prompt.
+
+\section{Conception du prompt système}
+Prompt de $\approx$ 100 lignes, en français, qui fixe : persona (tutoiement, ton chaleureux, 5 à 6 lignes maximum) ; \textbf{règle anti-hallucination} (aucun chiffre, prix, date ou fournisseur sans appel d'outil) ; table de correspondance question $\to$ outil ; \textbf{calendrier figé} (\og aujourd'hui \fg{} = 16/02/2026, \og semaine dernière \fg{} = 09 au 15/02) pour que le LLM n'ait pas à connaître la date ; formule de rentabilité imposée ($(\text{prix}-\text{coût})\times\text{quantité}$) ; \textbf{confirmation humaine} avant tout email et pas de deux actions irréversibles d'affilée ; copie du corps de l'email dans le champ \code{notes} de la commande. Le prompt a été renforcé au commit \code{65b335f} (obligation d'appeler \code{lire\_catalogue} même quand le LLM croit connaître la réponse).
+
+\section{Interface}
+Chainlit configuré par \code{.chainlit/config.toml} : langue \code{fr-FR}, thème clair par défaut, \code{cot = "tool\_call"} (les appels d'outils sont affichés), CSS personnalisé (199 lignes), \code{theme.json} (variables HSL, polices Playfair Display et Hanken Grotesk via Google Fonts), avatar 80~px, quatre \emph{starters}. \textit{Observé} : l'interface s'affiche correctement et un message déclenche bien un appel \code{lire\_catalogue}.
+
+\section{Historique Git}
+\begin{center}\small
+\begin{tabular}{@{}l l L{12cm}@{}}
+\toprule
+\code{42dc923} & 23/06 & Initial commit \\
+\code{5b6d484} & 23/06 & Design : CSS, thème, taille d'avatar \\
+\code{5cd260b} & 23/06 & Logs \code{print} dans les outils Notion et Email \\
+\code{65b335f} & 24/06 & Prompt renforcé, log de debug dans \code{prevision\_production} \\
+\code{932d8f4} & 24/06 & \code{load\_dotenv()} unique dans \code{main.py}, refactor CSS, nettoyage \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Points d'attention techniques}
+Classés par gravité décroissante. Ce sont des constats sur le code actuel, pas des hypothèses.
+
+\begin{enumerate}[leftmargin=0.7cm]
+  \item \textbf{Secret dans le dépôt.} \code{CONTEXT.md} (suivi par Git) contient un token d'intégration Notion en clair et les identifiants des quatre bases. À révoquer et à régénérer, puis à retirer de l'historique si le dépôt est ou devient public.
+  \item \textbf{Appel bloquant dans un handler async.} \code{run\_agent} appelle \code{agent.invoke} (synchrone) depuis \code{async def main}, ce qui bloque la boucle d'événements pendant tout le tour de l'agent. Corrections : \code{await cl.make\_async(run\_agent)(...)}, ou \code{ainvoke}.
+  \item \textbf{Pas de pagination Notion.} Les requêtes \code{data\_sources.query} n'exploitent ni \code{has\_more} ni \code{next\_cursor} ; l'API renvoie au plus 100 résultats par page. La base de démonstration ne compte que 53 ventes (une seule page), mais dès 100 lignes \code{lire\_ventes} et surtout \code{prevision\_production} travailleraient sur un échantillon tronqué sans le signaler.
+  \item \textbf{Historique sans messages d'outils.} Seuls les textes utilisateur et assistant sont conservés d'un tour à l'autre ; les appels d'outils et leurs résultats sont perdus. Le LLM doit les rappeler à chaque tour, et l'historique n'a ni troncature ni persistance (perdu au redémarrage).
+  \item \textbf{Configuration lue à l'import.} \code{tools/email.py} fait \code{int(os.getenv("SMTP\_PORT"))} au niveau module : \code{TypeError} à l'import si la variable est absente. Les modules lisent l'environnement avant l'appel à \code{load\_dotenv()} de \code{main.py} ; l'application fonctionne parce que Chainlit charge lui-même le \code{.env} au démarrage, ce qui est fragile.
+  \item \textbf{Dépendances non figées.} Aucune version dans \code{requirements.txt}, alors que LangChain 1.x, Chainlit 2.x et notion-client 3.x ont eu des changements d'API récents. Un lockfile (\code{pip-tools}, \code{uv}) s'impose.
+  \item \textbf{Aucun test.} Les outils sont pourtant faciles à tester en isolant le client Notion derrière une interface.
+  \item \textbf{Écriture Notion non validée ici.} \code{enregistrer\_commande} utilise \code{parent=\{"database\_id": ...\}} avec un SDK qui expose l'API \code{data\_sources} ; le chemin d'écriture n'a pas été exécuté lors de mes essais (token Notion factice). À tester avant de s'y fier.
+  \item \textbf{Durcissement.} \code{allow\_origins = ["*"]}, aucune authentification, envoi de fichiers activé (500~Mo) alors que non utilisé, pas de limitation de débit. Pendant mes essais, l'API Mistral a répondu une fois \code{429 Too Many Requests} (\textit{observé}) : aucun retry ni backoff n'est implémenté.
+  \item \textbf{Dérive de documentation.} \code{CONTEXT.md} mentionne \code{create\_react\_agent} alors que le code utilise \code{create\_agent} ; le README annonce Python 3.12 et \code{pyrefly.toml} cible Windows.
+\end{enumerate}
+
+\end{document}

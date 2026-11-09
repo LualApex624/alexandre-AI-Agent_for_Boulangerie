@@ -1,5 +1,7 @@
 # === Secrets ===
 .env
+.env.*
+!.env.example
 
 # === Environnement Python ===
 .venv/
@@ -11,18 +13,35 @@ __pycache__/
 dist/
 build/
 *.egg
+.pytest_cache/
+.coverage
+htmlcov/
 
-# === Tests et fichiers locaux ===
-resultats_tests.md
-test_agent.py
+# === Fichiers locaux de Gustave v1 ===
+/gustave/resultats_tests.md
+/gustave/test_agent.py
 
-# === Chainlit cache ===
+# === Données d'exécution d'Alexandre (traces locales) ===
+/alexandre/var/
+
+# === Chainlit ===
 .chainlit/.langchain.db
+.files/
 
-# === IDE ===
+# === Rapports d'évaluation générés ===
+/alexandre/evals/reports/
+
+# === Outils locaux (IDE, éditeurs) ===
+.claude/
 .vscode/
 .idea/
 *.swp
+
+# === Artefacts LaTeX ===
+*.aux
+*.log
+*.toc
+*.out
 
 # === OS ===
 .DS_Store

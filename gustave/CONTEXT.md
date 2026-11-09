@@ -34,14 +34,14 @@ boulangerie-agent/
 ## Variables d'environnement (.env)
 
 ```env
-NOTION_TOKEN=<NOTION_TOKEN_REDACTED>
+NOTION_TOKEN=# à remplir (voir .env, jamais dans le dépôt)
 
 
 # IDs des data sources Notion (collection://...)
-STOCK_DB_ID=<STOCK_DB_ID_REDACTED>
-CATALOGUE_DB_ID=<CATALOGUE_DB_ID_REDACTED>
-VENTES_DB_ID=<VENTES_DB_ID_REDACTED>
-COMMANDES_DB_ID=<COMMANDES_DB_ID_REDACTED>
+STOCK_DB_ID=# à remplir
+CATALOGUE_DB_ID=# à remplir
+VENTES_DB_ID=# à remplir
+COMMANDES_DB_ID=# à remplir
 
 MISTRAL_API_KEY=# à remplir
 
