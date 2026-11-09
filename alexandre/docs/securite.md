@@ -30,14 +30,16 @@ Le prompt rappelle aussi que le contenu des outils est une donnée et jamais un 
 - Un test parcourt tous les fichiers suivis par git à la recherche de motifs de clés (Notion, Google, OpenAI/Anthropic).
 - **L'historique git du dépôt contient encore un token Notion** commité dans la v1 (`CONTEXT.md`, commit `42dc923`). Il doit être considéré comme compromis : le régénérer côté Notion, et réécrire l'historique si le dépôt doit rester public.
 
-## Surface réduite de l'interface
+## Interface web (FastAPI + WebSocket, voir ADR 0002)
 
-- Serveur à l'écoute de `127.0.0.1` uniquement (valeur par défaut de Chainlit, à ne pas changer sans authentification).
-- Upload de fichiers désactivé (inutile ici) ; HTML brut désactivé (`unsafe_allow_html = false`).
-- Origines autorisées limitées à `http://localhost:8000` et `http://127.0.0.1:8000`.
-- **Images et liens markdown retirés** des réponses et du brouillon affiché : une image chargée automatiquement par le navigateur pourrait envoyer des données à un site tiers (exfiltration par contenu injecté). Le brouillon ne peut pas sortir de son bloc de code.
+- **Serveur limité à `127.0.0.1`** (`python -m boulangerie.serveur`) : rien n'est exposé sur le réseau.
+- **Origine vérifiée avant d'accepter la connexion WebSocket** : seules `http://localhost:<PORT>` et `http://127.0.0.1:<PORT>` sont admises, une origine absente ou étrangère est refusée (code 1008). Une page malveillante ouverte dans un autre onglet ne peut donc pas piloter Alexandre (détournement de WebSocket, CSWSH).
+- **En-têtes de sécurité** sur chaque réponse HTTP : CSP stricte (`default-src 'self'`, scripts et styles uniquement depuis le serveur, polices Google Fonts seules autorisées en externe, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`. Pas de documentation d'API exposée.
+- **Aucun texte reçu n'est inséré comme HTML** : le navigateur construit tout le DOM avec `textContent` ; seul le gras markdown est reconstruit en éléments. Vérifié dans le navigateur : une balise `<img onerror>` envoyée en message s'affiche telle quelle et ne s'exécute pas.
+- **Trames bornées et validées** : 8 000 caractères au plus par trame, 2 000 par message, schéma strict (`message` ou `validation`) ; une trame invalide renvoie une erreur sans couper la connexion. Une validation n'est acceptée que si une commande est réellement en attente, avec une décision par commande.
+- **Images et liens markdown retirés** des réponses et du brouillon affiché : une image chargée automatiquement par le navigateur pourrait envoyer des données à un site tiers (exfiltration par contenu injecté).
 - Au plus 12 appels au modèle par message de Madeleine (boucle d'outils, coût), puis message clair.
-- Aucune trace technique affichée à Madeleine : les erreurs deviennent un message simple, le détail reste dans les logs du serveur.
+- Aucune trace technique envoyée au navigateur : les erreurs deviennent un message simple, le détail reste dans les logs du serveur.
 
 ## Revue de sécurité (checklist `security-review`, 09/11/2026)
 
@@ -47,12 +49,12 @@ Le prompt rappelle aussi que le contenu des outils est une donnée et jamais un 
 | Secrets dans l'historique git | ❌ | token Notion dans `42dc923` (v1) — décision du propriétaire du dépôt requise |
 | Validation des entrées | ✅ | schémas Pydantic + validation au point d'action (`tests/test_securite.py`) |
 | Injection (SQL / requêtes) | n/a | aucune requête construite à partir de texte ; filtrage local |
-| XSS / exfiltration par le rendu | ✅ | HTML désactivé ; images et liens markdown neutralisés (tests) |
-| CSRF / origines | ✅ | `allow_origins` limité à localhost |
+| XSS / exfiltration par le rendu | ✅ | rendu par `textContent`, CSP stricte, images et liens markdown neutralisés (tests + vérification navigateur) |
+| CSRF / origines | ✅ | origine WebSocket vérifiée avant acceptation (`tests/test_serveur.py`) |
 | Authentification | ⚠️ assumé | local, mono-utilisateur (§13) ; écoute sur 127.0.0.1 |
 | Limitation de débit / coût | ✅ | limite d'appels au modèle par message ; retry avec backoff |
 | Erreurs et logs | ✅ | message générique pour Madeleine ; secret sentinelle absent des logs |
-| Dépendances | ✅ | lockfile ; `pip-audit -r requirements.txt` : aucune vulnérabilité connue |
+| Dépendances | ✅ | lockfile régénéré sans Chainlit (76 paquets) ; `pip-audit -r requirements.txt` : aucune vulnérabilité connue |
 
 ## Limites assumées
 

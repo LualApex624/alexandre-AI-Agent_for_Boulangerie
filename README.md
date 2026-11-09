@@ -17,10 +17,12 @@ python3 -m venv .venv
 source .venv/bin/activate          # Windows : .venv\Scripts\activate
 pip install -r requirements.txt    # versions figées (lockfile)
 cp .env.example .env               # puis remplir .env (voir ci-dessous)
-chainlit run app.py                # http://localhost:8000
+python -m boulangerie.serveur      # http://localhost:8000
 ```
 
-Lancer depuis `alexandre/` et garder le port **8000** : les origines autorisées de l'interface sont limitées à `localhost:8000`.
+Lancer depuis `alexandre/`. Le serveur n'écoute que sur `127.0.0.1` ; le port se change avec `PORT`.
+
+Pour revoir l'interface **sans clé ni réseau** (données de test, modèle par mots-clés, aucun mail réel) : `python -m scripts.demo_hors_ligne` puis http://localhost:8001. Réservé au développement : ce n'est pas l'agent réel.
 
 ### Variables d'environnement (`alexandre/.env`)
 
@@ -33,12 +35,13 @@ Lancer depuis `alexandre/` et garder le port **8000** : les origines autorisées
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | non (tout ou rien) | [Mailtrap](https://mailtrap.io) → Sandboxes → SMTP. Sans ces variables, lecture et prévision fonctionnent ; l'envoi renvoie un message clair |
 | `MISTRAL_API_KEY` | non | active Mistral comme modèle de secours |
 | `DATE_REFERENCE` | non | « aujourd'hui » pour les données de démo, défaut `2026-02-16` |
+| `PORT` | non | port du serveur web, défaut `8000` |
 
 ### Tests et évaluations
 
 ```bash
 cd alexandre
-.venv/bin/pytest                          # 85 tests et évals hors ligne, sans clé ni réseau
+.venv/bin/pytest                          # 108 tests et évals hors ligne, sans clé ni réseau
 .venv/bin/python -m evals.run_evals --k 3 # évals live : vrai Gemini, 6 scénarios, pass@k
 ```
 
@@ -55,12 +58,22 @@ Les 6 scénarios du cahier des charges (Tableau 1), vérifiés automatiquement p
 | « Combien de baguettes je dois pétrir demain matin ? » | estime la production à partir des mardis précédents |
 | « Y a-t-il des trucs à commander en urgence ? » | liste les ingrédients sous leur seuil, du plus urgent au moins urgent |
 
+## Interface
+
+Une page sur mesure, fidèle à la maquette « Alexandre — assistant de boulangerie » (palette Farine, Dorure, Croûte, Four, Levain ; Fraunces pour les titres, DM Sans pour le texte ; mobile d'abord) :
+
+- **Alexandre est un croissant animé** dont l'humeur suit l'état réel de l'agent : il respire au repos, se trémousse avec vapeur et anneau doré quand il pétrit sa réponse, rebondit avec une coche verte quand elle est prête. Le personnage tient dans un seul fichier, `web/avatar.svg`, à remplacer par le logo définitif.
+- **Les appels d'outils restent visibles** (§9 du cahier) : étapes en direct pendant le travail, puis rappel au-dessus de la réponse.
+- **Des cartes construites uniquement à partir des résultats d'outils** : Stock (jauge par rapport au seuil, bouton « Préparer la commande »), Ventes, Marge, Prévision (avec « estimation fragile » si peu d'historique), confirmation de commande.
+- **Brouillon de commande** avec le vrai destinataire et les boutons « Envoyer » / « Ne pas envoyer », une décision par commande.
+- **Alerte proactive** à l'ouverture : les ingrédients sous leur seuil, lus directement dans le stock, sans passer par le modèle.
+
 ## Architecture
 
 ```
-Madeleine ─► Chainlit (app.py) ─► Conversation ─► Agent LangGraph (create_agent)
-                 ▲  boutons « Envoyer / Ne pas envoyer »        │  ReAct : raisonne → appelle un outil → observe
-                 └──── interruption avant passer_commande ◄─────┤
+Madeleine ─► page web (web/) ══WebSocket══► serveur FastAPI ─► Conversation ─► Agent LangGraph (create_agent)
+                 ▲  boutons « Envoyer / Ne pas envoyer »                        │  ReAct : raisonne → appelle un outil → observe
+                 └──────────────── interruption avant passer_commande ◄─────────┤
                                                                 ├─► consulter_boulangerie ─► Notion (lecture paginée)
                                                                 ├─► prevoir_production ────► Notion + Pandas
                                                                 └─► passer_commande ───────► SMTP puis Notion (écriture)
@@ -68,7 +81,9 @@ Madeleine ─► Chainlit (app.py) ─► Conversation ─► Agent LangGraph (c
 
 | Module | Rôle |
 |---|---|
-| `app.py` | Interface Chainlit : appels d'outils visibles, brouillon de commande et boutons de validation |
+| `web/` | Page, styles, logique (`app.js`, sans framework) et avatar (`avatar.svg`) |
+| `boulangerie/serveur.py` | FastAPI : page statique, WebSocket, en-têtes de sécurité ; protocole documenté en tête du fichier |
+| `boulangerie/cartes.py` | Cartes de l'interface, construites depuis les résultats d'outils du tour |
 | `boulangerie/conversation.py` | Un fil de conversation : `envoyer`, `valider` (une décision par commande) ; messages clairs en cas de panne |
 | `boulangerie/agent.py` | `create_agent` + middlewares : validation humaine, retry, secours Mistral, limite d'appels |
 | `boulangerie/tools.py` | Les 3 outils et leur enveloppe de résultat commune ([contrat](alexandre/docs/tools.md)) |
@@ -77,7 +92,7 @@ Madeleine ─► Chainlit (app.py) ─► Conversation ─► Agent LangGraph (c
 | `boulangerie/prompts/system_prompt.md` | Prompt système (~100 lignes), calendrier injecté depuis `DATE_REFERENCE` |
 | `boulangerie/config.py` | Configuration typée, lue une fois, secrets jamais affichés |
 
-**Flux d'une question** : Chainlit transmet le message → `agent.ainvoke` (non bloquant) → le modèle choisit un outil → l'outil renvoie une enveloppe JSON (`status`, `summary`, `data`, `next_actions`, `error`) → le modèle répond à partir de `data` uniquement → l'état complet, messages d'outils compris, est conservé pour le tour suivant.
+**Flux d'une question** : la page envoie le message par WebSocket → `agent.ainvoke` (non bloquant) → le modèle choisit un outil → l'outil renvoie une enveloppe JSON (`status`, `summary`, `data`, `next_actions`, `error`) → le modèle répond à partir de `data` uniquement → l'état complet, messages d'outils compris, est conservé pour le tour suivant.
 
 **Flux d'une commande** : le modèle appelle `passer_commande` → le graphe **s'arrête avant l'exécution** → Madeleine voit le brouillon et le vrai destinataire → « Envoyer » reprend le graphe → email SMTP puis ligne dans Commandes Fournisseurs (référence `CMD-AAAAMMJJ-XXXX`, statut « Envoyée », corps du mail dans *Notes*). Une seule validation couvre les deux actions.
 
@@ -87,7 +102,7 @@ Madeleine ─► Chainlit (app.py) ─► Conversation ─► Agent LangGraph (c
 |---|---|---|
 | Orchestration | LangChain 1.x `create_agent` (graphe LangGraph) | un seul interlocuteur, interruption native avant une action irréversible, checkpointer pour l'historique ; voir l'[ADR 0001](alexandre/docs/adr/0001-langgraph-plutot-que-crewai.md) (LangGraph plutôt que CrewAI) |
 | LLM | Gemini `gemini-3.5-flash`, Mistral en secours optionnel | niveau gratuit, tool calling fiable en français ; `gemini-2.5-flash` n'est plus ouvert aux nouvelles clés |
-| Interface | Chainlit | conçu pour les agents, affiche les appels d'outils (`cot = "tool_call"`), boutons d'action pour la validation |
+| Interface | Page sur mesure (HTML/CSS/JS natif) servie par FastAPI, WebSocket | fidèle à la maquette, personnage animé selon l'état de l'agent, aucune chaîne de build ; écart assumé au §9 (Chainlit), voir l'[ADR 0002](alexandre/docs/adr/0002-frontend-sur-mesure-plutot-que-chainlit.md) |
 | Données | Notion (`notion-client` asynchrone) | imposé par le test ; 4 bases fournies |
 | Email | SMTP STARTTLS (`smtplib` hors boucle d'événements) | envoi réel exigé ; Mailtrap évite tout spam |
 | Prévision | Pandas | calcul simple, transparent, explicable à Madeleine |
@@ -128,15 +143,17 @@ Détails et preuves : [`alexandre/docs/securite.md`](alexandre/docs/securite.md)
 - Dépendance au niveau gratuit de Gemini : quota journalier et limites de débit possibles en démonstration intensive (erreur `429`). Renseigner `MISTRAL_API_KEY` active un modèle de secours.
 - Calendrier figé par `DATE_REFERENCE` pour coller aux données de démo.
 - Pas de streaming du texte : les appels d'outils s'affichent au fil de l'eau, la réponse s'affiche d'un bloc à la fin du tour (`ainvoke`, comme le flux du §5.3 du cahier).
+- Une nouvelle conversation démarre à chaque connexion (rechargement de la page, bouton ↻) : l'historique est gardé tant que la page reste ouverte.
 - Trois outils au lieu de « 4 à 6 fonctions » (§5.2) : la lecture Notion est un outil unique paramétré, ce que le §7.1 autorise, et l'envoi d'email et l'écriture Notion forment un seul outil pour qu'une seule validation couvre les deux (décision D2).
 
 ## Pistes d'amélioration
 
 - Ajuster la prévision selon la météo ([Open-Meteo](https://open-meteo.com), gratuit, sans clé) : moins de passage les jours de pluie.
 - Persister les conversations (checkpointer SQLite ou Postgres).
-- Streamer la réponse finale token par token (`astream` + `cl.Message.stream_token`).
+- Streamer la réponse finale token par token (`astream` + trames WebSocket).
+- Dictée vocale (le micro de la maquette), avec un service de reconnaissance de la parole.
 - Relance automatique des commandes gardées en trace locale.
-- Authentification Chainlit si l'interface doit être exposée au-delà du poste local.
+- Authentification si l'interface doit être exposée au-delà du poste local.
 - Évaluations live dans la CI avec une clé dédiée, et suivi du pass@k dans le temps.
 
 ## Documentation
@@ -145,4 +162,4 @@ Détails et preuves : [`alexandre/docs/securite.md`](alexandre/docs/securite.md)
 - [Contrat des outils](alexandre/docs/tools.md)
 - [Évaluations](alexandre/evals/README.md)
 - [Sécurité](alexandre/docs/securite.md)
-- [ADR](alexandre/docs/adr/README.md)
+- [ADR](alexandre/docs/adr/README.md) — LangGraph plutôt que CrewAI, interface sur mesure plutôt que Chainlit
