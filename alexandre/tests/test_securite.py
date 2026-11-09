@@ -100,9 +100,9 @@ def test_un_identifiant_de_base_notion_mal_forme_est_refuse_au_demarrage():
 
 
 def test_un_identifiant_notion_au_format_uuid_est_accepte():
-    settings = Settings.from_env({**ENV_COMPLET, "STOCK_DB_ID": "<STOCK_DB_ID_REDACTED>"})
+    settings = Settings.from_env({**ENV_COMPLET, "STOCK_DB_ID": "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6"})
 
-    assert settings.stock_db_id == "<STOCK_DB_ID_REDACTED>"
+    assert settings.stock_db_id == "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6"
 
 
 async def test_un_secret_contenu_dans_une_erreur_n_atteint_ni_les_logs_ni_le_modele(appeler, notion, caplog):
