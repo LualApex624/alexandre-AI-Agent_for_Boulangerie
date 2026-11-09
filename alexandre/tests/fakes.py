@@ -175,3 +175,37 @@ class FakeMailer:
         if self.error is not None:
             raise self.error
         self.sent.append({"destinataire": destinataire, "objet": objet, "corps": corps})
+
+
+# --- Faux modèle de langage scripté ----------------------------------------------
+
+from langchain_core.language_models import BaseChatModel  # noqa: E402
+from langchain_core.messages import AIMessage, BaseMessage  # noqa: E402
+from langchain_core.outputs import ChatGeneration, ChatResult  # noqa: E402
+from pydantic import Field  # noqa: E402
+
+
+class ScriptedChatModel(BaseChatModel):
+    """Rejoue des réponses prédéfinies (texte, appels d'outils ou exceptions) et
+    enregistre les messages reçus à chaque appel."""
+
+    reponses: list[Any] = Field(default_factory=list)
+    appels: list[list[BaseMessage]] = Field(default_factory=list)
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted"
+
+    def bind_tools(self, tools: Any, **kwargs: Any) -> "ScriptedChatModel":
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        self.appels.append(list(messages))
+        reponse = self.reponses.pop(0)
+        if isinstance(reponse, Exception):
+            raise reponse
+        return ChatResult(generations=[ChatGeneration(message=reponse)])
+
+
+def appel_outil(nom: str, arguments: dict, identifiant: str = "appel-1") -> AIMessage:
+    return AIMessage(content="", tool_calls=[{"name": nom, "args": arguments, "id": identifiant}])

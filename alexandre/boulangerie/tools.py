@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from boulangerie.envelope import arrondi, avertissement, erreur, notion_indisponible, succes
 from boulangerie.forecast import COEFFICIENT, OBSERVATIONS_MINIMALES, fenetre, prevoir
-from boulangerie.notion_repo import NotionIndisponible, NotionRepository, NouvelleCommande
+from boulangerie.notion_repo import Ingredient, NotionIndisponible, NotionRepository, NouvelleCommande
 from boulangerie.prompt import jour_fr
 
 log = logging.getLogger(__name__)
@@ -260,6 +260,17 @@ class CommanderArgs(BaseModel):
     )
 
 
+def annuaire_fournisseurs(stock: list[Ingredient]) -> dict[str, tuple[str, str | None]]:
+    """Nom normalisé → (nom canonique, email) d'après les fiches du stock."""
+    annuaire: dict[str, tuple[str, str | None]] = {}
+    for ingredient in stock:
+        if ingredient.fournisseur:
+            cle = normaliser(ingredient.fournisseur)
+            nom, email = annuaire.get(cle, (ingredient.fournisseur, None))
+            annuaire[cle] = (nom, email or ingredient.email)
+    return annuaire
+
+
 def _valider_commande(objet: str, corps: str, produits: str, montant: float | None) -> str | None:
     if not objet.strip() or len(objet) > OBJET_MAX:
         return f"L'objet doit faire entre 1 et {OBJET_MAX} caractères."
@@ -307,11 +318,7 @@ async def _passer_commande(
         stock = await deps.repo.lister_stock()
     except NotionIndisponible:
         return notion_indisponible()
-    annuaire: dict[str, tuple[str, str | None]] = {}
-    for ingredient in stock:
-        if ingredient.fournisseur:
-            nom, email = annuaire.get(normaliser(ingredient.fournisseur), (ingredient.fournisseur, None))
-            annuaire[normaliser(ingredient.fournisseur)] = (nom, email or ingredient.email)
+    annuaire = annuaire_fournisseurs(stock)
     trouve = annuaire.get(normaliser(fournisseur))
     if trouve is None:
         return erreur(
