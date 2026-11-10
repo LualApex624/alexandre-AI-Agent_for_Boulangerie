@@ -157,4 +157,4 @@ def test_le_client_gemini_echoue_vite_quand_le_quota_est_epuise():
 
     # Défaut de la bibliothèque : 6 relances (plus d'une minute avant l'erreur).
     assert principal.max_retries == 1
-    assert principal.timeout == 30
+    assert principal.timeout == 60  # l'API est parfois lente (20 à 40 s) : mieux vaut attendre que échouer
